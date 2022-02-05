@@ -1,4 +1,49 @@
-# JVC Projector Remote
+# JVC Projector Remote Improved
+
+This fork implements new features, improvements, and optimizations.
+
+Supported models:
+NX5/NX7/NX9
+NZ7/NZ8/NZ9 (Network password is required)
+
+Most likely any other D-ILA projector, and possibly older. 
+
+Funcs:
+  command: False if command not found, True if command is found (not if its successful)
+
+create venv
+
+```shell
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+To test
+```shell
+cp .env.template .env
+# edit .env with values
+source .env
+make test
+```
+
+For example, you can send pm_frame_adapt to switch to frame adapt hdr mode with your presets
+
+New docs: http://pro.jvc.com/pro/attributes/PRESENT/Manual/External%20Command%20Spec%20for%20D-ILA%20projector_V3.0.pdf
+## Testing
+*Important*
+Because this tests a physical device, I have to make assumptions about the state:
+* PJ should be off (or on and JVC_TEST_POWER set to false)
+* Your input should already have an HDR source playing/paused to test picture modes correctly
+
+## Public functions
+print_commands(): Returns a list of all supported command names
+
+
+
+
+
+
+# Original Readme
 
 This is a simple package to control JVC Projectors over IP. Created to be used with my [Homeassistant](https://www.home-assistant.io/) custom component: [bezmi/hass_custom_components](https://github.com/bezmi/hass_custom_components/tree/master/custom_components/jvcprojector). Works fine as a standalone module.
 
