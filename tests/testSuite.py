@@ -17,13 +17,16 @@ jvc = JVCProjector(host=host, delay_ms=1500, connect_timeout=60, password=passwo
 
 if jvc.is_on() and test_power:
     print("Projector should be off to ensure the tests work fully")
-    print("Caution: Running power on/off tests more than once every few minutes is really bad for your PJ")
+    print(
+        "Caution: Running power on/off tests more than once every few minutes is really bad for your PJ"
+    )
 
 test_start = datetime.now()
 minimum_test_time = 100
 
+
 class TestFunctions(unittest.TestCase):
-    def test_power_state(self):
+    def test_01power_state(self):
         """
         The PJ should report False for is_on state
         """
@@ -32,11 +35,11 @@ class TestFunctions(unittest.TestCase):
         else:
             self.assertEqual(jvc.is_on(), False)
 
-    def test_power_on(self):
+    def test_02power_on(self):
         """
         PJ should turn on and report
         """
-        if test_power and not jvc.is_on() :
+        if test_power and not jvc.is_on():
             command = jvc.power_on()
             print(command)
             self.assertEqual(command, "PW")
@@ -44,24 +47,35 @@ class TestFunctions(unittest.TestCase):
             print("PJ is on, skipping power on test")
             pass
 
-    def test_menu_buttons(self):
-        menu_tests = ["menu_back", "menu", "menu_left", "menu_right", "menu_down", "menu_back", "menu_up", "menu_ok", "menu", "menu_back"]
+    def test_04menu_buttons(self):
+        menu_tests = [
+            "menu_back",
+            "menu",
+            "menu_left",
+            "menu_right",
+            "menu_down",
+            "menu_back",
+            "menu_up",
+            "menu_ok",
+            "menu",
+            "menu_back",
+        ]
         print("You should see menu pop up and change")
         for item in menu_tests:
             print(f"testing {item}")
             self.assertEqual(jvc.command(item), True)
         print("You should see menu disappear now")
 
-    def test_power_off(self):
+    def test_09power_off(self):
         """
         PJ should turn off
         """
         if test_power and jvc.is_on():
             # if test took less than 60, wait so PJ doesn't heat cycle
-            test_now = datetime.now() 
-            test_delta = (test_now-test_start).seconds
+            test_now = datetime.now()
+            test_delta = (test_now - test_start).seconds
             if test_delta < minimum_test_time:
-                sleep_time = minimum_test_time-test_delta
+                sleep_time = minimum_test_time - test_delta
                 print(f"sleeping for {sleep_time} to let PJ finish warming up")
                 sleep(sleep_time)
 
@@ -70,8 +84,8 @@ class TestFunctions(unittest.TestCase):
         elif test_power:
             print("PJ is on, skipping power on test")
             pass
-    
-    def test_picture_hdr_modes(self):
+
+    def test_03picture_hdr_modes(self):
         """
         PJ should switch between picture modes
         """
@@ -81,17 +95,30 @@ class TestFunctions(unittest.TestCase):
             self.assertEqual(jvc.command(item), True)
             sleep(5)
 
+    def test_05replace_headers(self):
+        """
+        Should strip all expected headers
+        """
+        pass
+
+    def test_06print_commands(self):
+        """
+        print_commands() should run 
+        """
+        pass
+
 
 def suite():
     suite = unittest.TestSuite()
-    suite.addTest(TestFunctions("test_power_state"))
-    suite.addTest(TestFunctions("test_power_on"))
-    suite.addTest(TestFunctions("test_picture_hdr_modes"))
-    suite.addTest(TestFunctions("test_menu_buttons"))
-    suite.addTest(TestFunctions("test_power_off"))
+    suite.addTest(TestFunctions("test_01power_state"))
+    suite.addTest(TestFunctions("test_02power_on"))
+    suite.addTest(TestFunctions("test_03picture_hdr_modes"))
+    suite.addTest(TestFunctions("test_04menu_buttons"))
+    suite.addTest(TestFunctions("test_09power_off"))
 
     return suite
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     runner = unittest.TextTestRunner(failfast=True)
     runner.run(suite())
