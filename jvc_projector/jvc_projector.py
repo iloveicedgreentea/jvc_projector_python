@@ -186,10 +186,12 @@ class JVCProjector:
                 received_ack = await reader.read(len(ack_value))
             except asyncio.TimeoutError:
                 result = "Connection timed out. Command is probably not allowed to run at this time."
-                success = False
                 self.logger.error(result)
                 writer.close()
-                return result, success
+                return result, False
+            except ConnectionRefusedError:
+                self.logger.error("Connection Refused when getting ack")
+                return "Connection Refused", False
 
             self.logger.debug("received_ack: %s", received_ack)
 
@@ -197,26 +199,26 @@ class JVCProjector:
             # receive the data we requested
             if received_ack == ack_value and command_type == Header.operation.value:
                 result = received_ack
-                success = True
                 writer.close()
-                return result, success
-            elif received_ack == ack_value and command_type == Header.reference.value:
+
+                return result, True
+                
+            if received_ack == ack_value and command_type == Header.reference.value:
                 message = await reader.read(1024)
                 self.logger.debug("result: %s, %s", received_ack, message)
                 writer.close()
                 result = message
-                success = True
 
-                return result, success
-            else:
-                writer.close()
-                success = False
-                result = "Unexpected ack received from PJ after sending a command. Perhaps a command got cancelled because a new connection was made."
-                self.logger.error(result)
-                self.logger.error("received_ack: %s", received_ack)
-                self.logger.error("ack_value: %s", ack_value)
+                return result, True
+            
+            # Otherwise, it failed
+            writer.close()
+            result = "Unexpected ack received from PJ after sending a command. Perhaps a command got cancelled because a new connection was made."
+            self.logger.error(result)
+            self.logger.error("received_ack: %s", received_ack)
+            self.logger.error("ack_value: %s", ack_value)
 
-                return result, success
+            return result, False
 
     async def _async_construct_command(
         self, raw_command: str, command_type: bytes
