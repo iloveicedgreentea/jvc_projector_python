@@ -102,6 +102,8 @@ class MotionEnhanceModes(Enum):
     off = b"0"
     low = b"1"
     high = b"2"
+
+
 class GraphicModeModes(Enum):
 
     standard = b"0"
