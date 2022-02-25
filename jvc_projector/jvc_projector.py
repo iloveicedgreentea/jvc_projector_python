@@ -52,13 +52,13 @@ class JVCProjector:
         delta = datetime.datetime.now() - self.last_command_time
 
         if self.delay > delta:
-            return await asyncio.sleep((self.delay - delta).total_seconds())
+            ((self.delay - delta).total_seconds())
 
     async def _async_send_command(
         self,
         send_command: Union[list[bytes], bytes],
-        ack: bytes,
         command_type: bytes = b"!",
+        ack: bytes = None,
     ) -> tuple[str, bool]:
         """
         Sends a command with a flag to expect an ack.
@@ -89,7 +89,7 @@ class JVCProjector:
             try:
                 reader, writer = await asyncio.open_connection(self.host, self.port)
             except ConnectionRefusedError:
-                return "Connection Refused", False
+                return "Connection Refused on connection", False
             except asyncio.TimeoutError:
                 return "Connection timed out", False
 
@@ -99,23 +99,41 @@ class JVCProjector:
             return result, success
 
         # Check commands
+        if command_type == Header.reference.value:
+            result, success = await self._async_do_command(
+                reader, writer, send_command, ack, command_type
+            )
+
+            return result, success
         if isinstance(send_command, list):
             for cmd in send_command:
+                cons_command, ack = await self._async_construct_command(
+                    cmd, command_type
+                )
+                if not ack:
+                    return cons_command, ack
+                # need a delay otherwise it kills connection
+                await asyncio.sleep(0.1)
                 result, success = await self._async_do_command(
-                    reader, writer, cmd, ack, command_type
+                    reader, writer, cons_command, ack.value, command_type
                 )
                 if not success:
                     return result, success
         else:
+            cons_command, ack = await self._async_construct_command(
+                send_command, command_type
+            )
+            if not ack:
+                return cons_command, ack
             result, success = await self._async_do_command(
-                reader, writer, send_command, ack, command_type
+                reader, writer, cons_command, ack.value, command_type
             )
             if not success:
                 return result, success
 
         self.last_command_time = datetime.datetime.now()
         self.logger.debug("send command result: %s", result)
-
+        writer.close()
         return result, success
 
     async def _async_handshake(
@@ -199,18 +217,16 @@ class JVCProjector:
             # receive the data we requested
             if received_ack == ack_value and command_type == Header.operation.value:
                 result = received_ack
-                writer.close()
 
                 return result, True
-                
+
             if received_ack == ack_value and command_type == Header.reference.value:
                 message = await reader.read(1024)
                 self.logger.debug("result: %s, %s", received_ack, message)
-                writer.close()
                 result = message
 
                 return result, True
-            
+
             # Otherwise, it failed
             writer.close()
             result = "Unexpected ack received from PJ after sending a command. Perhaps a command got cancelled because a new connection was made."
@@ -226,8 +242,10 @@ class JVCProjector:
         """
         Transform commands into their byte values
         """
-        command, value = raw_command.split(",")
-
+        try:
+            command, value = raw_command.split(",")
+        except ValueError:
+            return "No value for command provided", False
         # Check if command is implemented
         if not hasattr(Commands, command):
             self.logger.error("Command not implemented: %s", command)
@@ -271,32 +289,12 @@ class JVCProjector:
             )
         """
         self.logger.debug("exec_command Executing command: %s", command)
+        result, success = await self._async_send_command(command, command_type)
 
-        if isinstance(command, str):
-            cons_command, ack = await self._async_construct_command(
-                command, command_type
-            )
-            result, success = await self._async_send_command(
-                cons_command, ack.value, command_type
-            )
-
+        if not success:
             return result, success
-        elif isinstance(command, list):
-            for cmd in command:
-                # TODO: this may need a sleep to prevent the thing from dying
-                # TODO: also maybe implement a retry mechanism
-                cons_command, ack = await self._async_construct_command(
-                    cmd, command_type
-                )
-                result, success = await self._async_send_command(
-                    cons_command, ack.value, command_type
-                )
 
-                if not success:
-                    return result, success
-            return "ok", True
-        else:
-            return "Command is not valid type", False
+        return "ok", True
 
     async def async_info(self) -> tuple[str, bool]:
         """
@@ -311,7 +309,6 @@ class JVCProjector:
 
         return await self._async_send_command(
             cmd,
-            ack=ACKs.menu_ack.value,
             command_type=Header.operation.value,
         )
 
@@ -379,9 +376,14 @@ class JVCProjector:
         """
         Sets (opinionated!) optimal gaming settings
         """
+        # task = asyncio.create_task(self.async_get_low_latency_state())
         state = await self.async_get_low_latency_state()
+        await asyncio.sleep(3)
         # If LL is on, we can turn it off first
-        # TODO: make this more DRY
+
+        if state is None:
+            return "Error getting low latency state"
+
         if state:
             cmds = [
                 "enhance, seven",
@@ -392,7 +394,7 @@ class JVCProjector:
             # ll_commands = self._build_mode_commands(cmds)
             # return ll_commands
             return await self.async_exec_command(cmds)
-        else:
+        elif state is False:
             # If LL is off, we can enable these settings
             cmds = [
                 "laser_dim, off",
@@ -508,9 +510,17 @@ class JVCProjector:
         return asyncio.run(self.async_get_low_latency_state())
 
     async def async_get_low_latency_state(self) -> bool:
-        """Get the current state of LL"""
-        state, _ = await self._async_do_reference_op("low_latency", ACKs.picture_ack)
+        """
+        Get the current state of LL
+
+        None if there was an error
+        """
+        state, success = await self._async_do_reference_op(
+            "low_latency", ACKs.picture_ack
+        )
         # LL is off, could be disabled
+        if not success:
+            return None
         if state == b"PM0":
             return False
 
