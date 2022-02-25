@@ -2,6 +2,7 @@
 Implements the JVC protocol
 """
 
+from asyncore import write
 import datetime
 import logging
 from typing import Union
@@ -103,9 +104,10 @@ class JVCProjector:
             result, success = await self._async_do_command(
                 reader, writer, send_command, ack, command_type
             )
-
+            writer.close()
             return result, success
         if isinstance(send_command, list):
+
             for cmd in send_command:
                 cons_command, ack = await self._async_construct_command(
                     cmd, command_type
@@ -129,6 +131,7 @@ class JVCProjector:
                 reader, writer, cons_command, ack.value, command_type
             )
             if not success:
+                writer.close()
                 return result, success
 
         self.last_command_time = datetime.datetime.now()
@@ -347,6 +350,7 @@ class JVCProjector:
         Sets (opinionated!) optimal HDR gaming settings
         """
         state = await self.async_get_low_latency_state()
+        await asyncio.sleep(3)
         # If LL is on, we can turn it off first
         # TODO: make this more DRY
         if state:
@@ -378,6 +382,7 @@ class JVCProjector:
         """
         # task = asyncio.create_task(self.async_get_low_latency_state())
         state = await self.async_get_low_latency_state()
+        # todo: fix this, its a concurrency issue
         await asyncio.sleep(3)
         # If LL is on, we can turn it off first
 
@@ -413,6 +418,7 @@ class JVCProjector:
         so PJ socket will time out
         """
         state = await self.async_get_low_latency_state()
+        await asyncio.sleep(3)
         # If LL is on, we can turn it off first
         # TODO: make this more DRY
         if state:
@@ -445,6 +451,7 @@ class JVCProjector:
         Sets (opinionated) optimal sdr film settings
         """
         state = await self.async_get_low_latency_state()
+        await asyncio.sleep(3)
         # If LL is on, we need to turn it off
         # TODO: make this more DRY
         if state:
