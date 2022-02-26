@@ -18,14 +18,6 @@ jvc = JVCProjector(host=host, delay_ms=1500, connect_timeout=60, password=passwo
 test_start = datetime.now()
 MIN_TEST_TIME = 100
 
-
-def run(cmd):
-    """
-    Runs async commands in sync
-    """
-    return asyncio.run(cmd)
-
-
 class TestFunctions(unittest.TestCase):
     """
     Test projector
@@ -33,49 +25,47 @@ class TestFunctions(unittest.TestCase):
 
     def test_01power_state(self):
         """
-        The PJ should report False for is_on state
+        The PJ should report True for is_on state
         """
-        state = run(jvc.async_is_on())
-        if state:
-            self.assertEqual(state, True)
-        else:
-            self.assertEqual(state, False)
+        state = asyncio.run(jvc.async_is_on())
+        
+        self.assertEqual(state, True)
+        
 
-    # def test_02power_on(self):
-    #     """
-    #     PJ should turn on and report
-    #     """
-    #     if test_power and not jvc.is_on():
-    #         command = jvc.power_on()
-    #         print(command)
-    #         self.assertEqual(command, "PW")
-    #     elif test_power:
-    #         print("PJ is on, skipping power on test")
-    #         pass
+    def test_02power_on(self):
+        """
+        PJ should turn on and report
+        """
+        command = jvc.power_on()
+        self.assertEqual(command, ('ok', True))
+        # if test_power and not jvc.is_on():
+        #     command = jvc.power_on()
+        #     print(command)
+        #     self.assertEqual(command, "PW")
+        # elif test_power:
+        #     print("PJ is on, skipping power on test")
+        #     pass
 
-    # def test_04menu_buttons(self):
-    #     """
-    #     Should run menu functions and then exit
-    #     """
-    #     # TODO: add a test to run multiple menu commands with one connection
-    #     # TODO: fix to use new way of sending command
-    #     menu_tests = [
-    #         "menu_back",
-    #         "menu",
-    #         "menu_left",
-    #         "menu_right",
-    #         "menu_down",
-    #         "menu_back",
-    #         "menu_up",
-    #         "menu_ok",
-    #         "menu",
-    #         "menu_back",
-    #     ]
-    #     print("You should see menu pop up and change")
-    #     for item in menu_tests:
-    #         print(f"testing {item}")
-    #         self.assertEqual(jvc.command(item), True)
-    #     print("You should see menu disappear now")
+    def test_04menu_buttons(self):
+        """
+        Should run menu functions and then exit
+        """
+        # TODO: add a test to run multiple menu commands with one connection
+        # TODO: fix to use new way of sending command
+        
+        # mock does not support sequential commands for now
+        menu_tests = [
+            "menu,menu",
+            "menu,left",
+            "menu,right",
+            "menu,down",
+            "menu,ok",
+            "menu,back",
+            "menu,up",
+        ]
+        for cmd in menu_tests:
+            out =jvc.exec_command(cmd)
+            self.assertEqual(out, ('ok', True))
 
     # def test_09power_off(self):
     #     """
