@@ -122,9 +122,13 @@ class JVCProjector:
                 if not success:
                     return result, success
         else:
-            cons_command, ack = await self._async_construct_command(
-                send_command, command_type
-            )
+            try:
+                cons_command, ack = await self._async_construct_command(
+                    send_command, command_type
+                )
+            except TypeError:
+                cons_command = send_command
+
             if not ack:
                 return cons_command, ack
             result, success = await self._async_do_command(
@@ -312,6 +316,7 @@ class JVCProjector:
 
         return await self._async_send_command(
             cmd,
+            ack=ACKs.menu_ack,
             command_type=Header.operation.value,
         )
 
@@ -355,7 +360,7 @@ class JVCProjector:
         # TODO: make this more DRY
         if state:
             cmds = [
-                "picture_mode, hdr10",
+                "picture_mode, hdr",
                 "enhance, seven",
                 "motion_enhance, off",
                 "graphic_mode, hires1",
@@ -367,7 +372,7 @@ class JVCProjector:
         else:
             # If LL is off, we can enable these settings
             cmds = [
-                "picture_mode, hdr10",
+                "picture_mode, hdr",
                 "laser_dim, off",
                 "low_latency, on",
                 "enhance, seven",

@@ -103,21 +103,21 @@ cp .env.template .env
 # edit .env with values
 ```
 
+### Testing
 JVC_TEST_POWER: true/false to test power functions
 JVC_TEST_FUNCTIONS: true/false to test various button functions
 
-Tests are WIP and not really prioritized at the moment
-
-_Important_
-Because this tests a physical device, I have to make assumptions about the state:
-
-- PJ should be off (or on and JVC_TEST_POWER set to false)
-- Your input should already have an HDR source playing/paused to test picture modes correctly
-- Do not repeatedly turn your PJ on and off. Testing supports flags for power testing.
+You can run the test at the local device or run a mock server I made (WIP) to test commands
 
 ```shell
-# Run tests
+# Venv in one window
+python mock/mochrie.py
+```
+
+```shell
+# Run tests in other window
 source .env
+export JVC_HOST=127.0.0.1  
 make test
 ```
 
