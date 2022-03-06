@@ -2,58 +2,62 @@
 Implements the JVC protocol
 """
 
-from asyncore import write
 import datetime
 import logging
-from typing import Union
+from typing import Final, Union, Awaitable, Callable
 import asyncio
-
-# import the enums
+from jvc_projector.optimal_settings import hdr_film, hdr_game, sdr_film, sdr_game
 from jvc_projector.commands import ACKs, Footer, Header, Commands, PowerStates, Enum
 
 
-class JVCProjector:
-    """JVC Projector Control"""
 
-    # Const values
-    PJ_OK = ACKs.greeting.value
-    PJ_ACK = ACKs.pj_ack.value
-    req = ACKs.pj_req.value
+
+
+
+class JVCProjector(asyncio.Protocol):
+    """JVC Projector Control"""
 
     def __init__(
         self,
-        host: str,
-        port: int = 20554,
-        delay_ms: int = 1000,
-        connect_timeout: int = 10,
-        password: str = None,
+        # Can supply a logger object. It can hook into the HA logger
         logger: logging.Logger = logging.getLogger(__name__),
+        connection_lost_callback: Callable[[], Awaitable[None]] = None,
+        loop: asyncio.AbstractEventLoop = None,
+        update_callback: Callable[[str], None] = None,
     ):
-        self.host = host
-        self.port = port
-        self.connect_timeout = connect_timeout
-        self.delay = datetime.timedelta(microseconds=(delay_ms * 1000))
-        self.last_command_time = datetime.datetime.now() - datetime.timedelta(
-            seconds=10
-        )
+        self.host = "host"
+        self.port = "port"
         # NZ models have password authentication
-        self.password = password
+        self.password = "password"
         self.logger = logger
+        self._update_callback = update_callback
+        self._loop = loop
         self._lock = asyncio.Lock()
+        # Const values
+        self.PJ_OK: Final = ACKs.greeting.value
+        self.PJ_ACK: Final = ACKs.pj_ack.value
+        self.PJ_REQ: Final = ACKs.pj_req.value
+        self._connection_lost_callback = connection_lost_callback
+        self.connect_timeout: int = 10
+        
 
         if self.password:
-            self.pj_req = self.req + f"_{self.password}".encode()
+            self.pj_req = self.PJ_REQ + f"_{self.password}".encode()
         else:
-            self.pj_req = self.req
+            self.pj_req = self.PJ_REQ
 
-    async def _async_throttle(self):
-        if self.delay == 0:
-            return
+    def connection_made(self, transport: asyncio.Transport) -> tuple[str, bool]:
+        """Do stuff when connection is made"""
+        pass
+    
+    def data_received(self, data: bytes) -> None:
+        # return super().data_received(data)
+        if data == self.PJ_OK:
+            pass
+        # TODO: call a parser method to lookup what is happening
 
-        delta = datetime.datetime.now() - self.last_command_time
-
-        if self.delay > delta:
-            ((self.delay - delta).total_seconds())
+    
+   
 
     async def _async_send_command(
         self,
@@ -81,23 +85,9 @@ class JVCProjector:
         result = ""
         success = True
 
-        # throttle command if too quick otherwise
-        # JVC kills the connection
-        await self._async_throttle()
+        
 
-        async with self._lock:
-            # Try connecting
-            try:
-                reader, writer = await asyncio.open_connection(self.host, self.port)
-            except ConnectionRefusedError:
-                return "Connection Refused on connection", False
-            except asyncio.TimeoutError:
-                return "Connection timed out", False
 
-        # 3 step handshake
-        result, success = await self._async_handshake(reader, writer)
-        if not success:
-            return result, success
 
         # Check commands
         if command_type == Header.reference.value:
@@ -138,7 +128,6 @@ class JVCProjector:
                 writer.close()
                 return result, success
 
-        self.last_command_time = datetime.datetime.now()
         self.logger.debug("send command result: %s", result)
         writer.close()
         return result, success
@@ -154,35 +143,7 @@ class JVCProjector:
         """
 
         async with self._lock:
-            msg_pjok = await reader.read(len(self.PJ_OK))
-            if msg_pjok != self.PJ_OK:
-                result = (
-                    f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
-                )
-                success = False
-
-                return result, success
-
-            # try sending PJREQ, if there's an error, raise exception
-            try:
-                writer.write(self.pj_req)
-                await writer.drain()
-            except asyncio.TimeoutError as err:
-                result = f"Timeout sending PJREQ {err}"
-                success = False
-                writer.close()
-
-                return result, success
-
-            # see if we receive PJACK, if not, raise exception
-            msg_pjack = await reader.read(len(self.PJ_ACK))
-            if msg_pjack != self.PJ_ACK:
-                result = f"Exception with PJACK: {msg_pjack}"
-                success = False
-
-                return result, success
-
-            return "ok", True
+            pass
 
     async def _async_do_command(
         self,
@@ -443,7 +404,7 @@ class JVCProjector:
             # If LL is off, we can enable these settings
             cmds = [
                 "picture_mode, frame_adapt_hdr",
-                "laser_dim, auto1",
+                "laser_dim, off",
                 "enhance, seven",
                 "motion_enhance, low",
                 "graphic_mode, hires1",
