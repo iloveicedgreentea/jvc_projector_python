@@ -5,7 +5,6 @@ Implements the JVC protocol
 import logging
 from typing import Final, Union, Awaitable, Callable
 import asyncio
-from jvc_projector.optimal_settings import hdr_film, hdr_game, sdr_film, sdr_game
 from jvc_projector.commands import ACKs, Footer, Header, Commands, PowerStates, Enum
 
 
