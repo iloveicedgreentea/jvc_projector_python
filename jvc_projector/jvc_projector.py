@@ -53,10 +53,6 @@ class JVCProjector:
         """Open a connection"""
         assert self.port >= 0, f"Port must be greater than 0: {self.port}"
         assert self.host != "", f"Host must not be empty: {self.host}"
-        assert (
-            self.connect_timeout >= 2
-        ), f"connect_timeout must be over 1: {self.connect_timeout}"
-
         msg, success = await self.reconnect()
         if not success:
             self.logger.error(msg)
