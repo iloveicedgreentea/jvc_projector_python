@@ -3,6 +3,7 @@ All the enums for commands
 """
 from enum import Enum
 
+
 # pylint: disable=missing-class-docstring invalid-name
 class Header(Enum):
     ack = b"\x06"
