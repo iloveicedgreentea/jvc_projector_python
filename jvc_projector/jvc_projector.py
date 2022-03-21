@@ -47,6 +47,7 @@ class JVCProjector:
         self._halted = False
         self.reader: asyncio.StreamReader = None
         self.writer: asyncio.StreamWriter = None
+        self.command_read_timeout = 3
 
     async def async_open_connection(self) -> bool:
         """Open a connection"""
@@ -269,16 +270,16 @@ class JVCProjector:
                 try:
                     # seems like certain commands timeout when PJ is off
                     received_ack = await asyncio.wait_for(
-                        self.reader.readline(), timeout=5
+                        self.reader.readline(), timeout=self.command_read_timeout
                     )
                 except asyncio.TimeoutError:
                     # LL is used in async_update() and I don't want to spam HA logs
-                    if command == b"?\x89\x01PMLL\n":
-                        self.logger.debug("Getting LL timedout. Is PJ off?")
-                        pass
-                    # Sometimes if you send a command that is greyed out, the PJ will just hang
-                    result = "Connection timed out. Command is probably not allowed to run at this time."
-                    self.logger.error(result)
+                    if not command == b"?\x89\x01PMLL\n":
+                        # Sometimes if you send a command that is greyed out, the PJ will just hang
+                        result = f"Connection timed out. Command {command} is probably not allowed to run at this time."
+                        self.logger.error(result)
+                    else:
+                        self.logger.debug("Getting LL timeout. Is PJ off?")
                     return result, False
                 except ConnectionRefusedError:
                     self.logger.error("Connection Refused when getting ack")
