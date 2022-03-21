@@ -155,11 +155,13 @@ class JVCProjector:
     def _increase_retry_interval(self):
         self._retry_interval = min(300, 1.5 * self._retry_interval)
 
-    def close(self):
-        # TODO: maybe implement these
-        """Close the AVR device connection and don't try to reconnect."""
+    async def close(self):
+        """Close the connection."""
         self.logger.debug("Closing connection to AVR")
         self._closing = True
+        self.writer.close()
+        await self.writer.wait_closed()
+        self._closing = False
 
     def halt(self):
         """Close the AVR device connection and wait for a resume() request."""
@@ -242,63 +244,82 @@ class JVCProjector:
         ack: bytes,
         command_type: bytes = b"!",
     ) -> tuple[str, bool]:
-        async with self._lock:
-            self.logger.debug("_do_command sending command: %s", command)
-            # send the command
-            self.writer.write(command)
-            try:
-                await self.writer.drain()
-            except ConnectionError as err:
-                # reaching this means the writer was closed somewhere
-                self.logger.error(err)
-                # restart the connection
-                await self.connection_lost()
+        # TODO: make this nicer
+        retry_count = 0
+        while retry_count < 5:
+            async with self._lock:
+                self.logger.debug("_do_command sending command: %s", command)
+                # send the command
                 self.writer.write(command)
-                await self.writer.drain()
+                try:
+                    await self.writer.drain()
+                except ConnectionError as err:
+                    # reaching this means the writer was closed somewhere
+                    self.logger.error(err)
+                    self.logger.debug("Restarting connection")
+                    # restart the connection
+                    await self.connection_lost()
+                    self.logger.debug("Sending command again")
+                    # restart the loop
+                    retry_count += 1
+                    continue
 
-            # if we send a command that returns info, the projector will send
-            # an ack, followed by the actual message. Check to see if the ack sent by
-            # projector is correct, then return the message.
-            ack_value = (
-                Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
-            )
-            self.logger.debug("ack_value: %s", ack_value)
+                # if we send a command that returns info, the projector will send
+                # an ack, followed by the actual message. Check to see if the ack sent by
+                # projector is correct, then return the message.
+                ack_value = (
+                    # TODO: possibly not using the right ack which is making it not read enough?
+                    Header.ack.value
+                    + Header.pj_unit.value
+                    + ack
+                    + Footer.close.value
+                )
+                self.logger.debug("ack_value: %s", ack_value)
 
-            # Receive the acknowledgement from PJ
-            try:
-                received_ack = await self.reader.read(len(ack_value))
-            except asyncio.TimeoutError:
-                # Sometimes if you send a command that is greyed out, the PJ will just hang
-                result = "Connection timed out. Command is probably not allowed to run at this time."
+                # Receive the acknowledgement from PJ
+                try:
+                    received_ack = await self.reader.read(len(ack_value))
+                except asyncio.TimeoutError:
+                    # Sometimes if you send a command that is greyed out, the PJ will just hang
+                    result = "Connection timed out. Command is probably not allowed to run at this time."
+                    self.logger.error(result)
+                    return result, False
+                except ConnectionRefusedError:
+                    self.logger.error("Connection Refused when getting ack")
+                    return "Connection Refused", False
+
+                self.logger.debug("received_ack: %s", received_ack)
+
+                if received_ack == b"":
+                    self.logger.error("Got a blank ack. Restarting connection")
+                    await self.close()
+                    await self.connection_lost()
+                    retry_count += 1
+                    continue
+
+                # get the ack for operation
+                if received_ack == ack_value and command_type == Header.operation.value:
+                    self.logger.debug("result: %s", received_ack)
+                    return received_ack, True
+
+                # if we got what we expect and this is a reference,
+                # receive the data we requested
+                if received_ack == ack_value and command_type == Header.reference.value:
+                    message = await self.reader.read(1024)
+                    self.logger.debug("result: %s, %s", received_ack, message)
+
+                    return message, True
+
+                # Otherwise, it failed
+                # Because this now reuses a connection, reaching this stage means catastrophic failure, or HA running as usual :)
+                result = "Unexpected ack received from PJ after sending a command. Perhaps a command got cancelled because a new connection was made."
                 self.logger.error(result)
+                self.logger.error("received_ack: %s", received_ack)
+                self.logger.error("ack_value: %s", ack_value)
+
                 return result, False
-            except ConnectionRefusedError:
-                self.logger.error("Connection Refused when getting ack")
-                return "Connection Refused", False
-
-            self.logger.debug("received_ack: %s", received_ack)
-
-            # get the ack for operation
-            if received_ack == ack_value and command_type == Header.operation.value:
-                self.logger.debug("result: %s", received_ack)
-                return received_ack, True
-
-            # if we got what we expect and this is a reference,
-            # receive the data we requested
-            if received_ack == ack_value and command_type == Header.reference.value:
-                message = await self.reader.read(1024)
-                self.logger.debug("result: %s, %s", received_ack, message)
-
-                return message, True
-
-            # Otherwise, it failed
-            # Because this now reuses a connection, reaching this stage means catastrophic failure, or HA running as usual :)
-            result = "Unexpected ack received from PJ after sending a command. Perhaps a command got cancelled because a new connection was made."
-            self.logger.error(result)
-            self.logger.error("received_ack: %s", received_ack)
-            self.logger.error("ack_value: %s", ack_value)
-
-            return result, False
+        self.logger.warning("retry count for running commands exceeded")
+        return "", False
 
     async def _async_construct_command(
         self, raw_command: str, command_type: bytes
