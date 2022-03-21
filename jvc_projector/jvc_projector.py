@@ -115,6 +115,7 @@ class JVCProjector:
         """
         if self.password:
             pj_req = self.PJ_REQ + f"_{self.password}".encode()
+            self.logger.debug("connecting with password hunter2")
         else:
             pj_req = self.PJ_REQ
 
@@ -123,22 +124,25 @@ class JVCProjector:
         self.logger.debug(msg_pjok)
         if msg_pjok != self.PJ_OK:
             result = f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
-            success = False
-
-            return result, success
+            self.logger.error(result)
+            return result, False
 
         # try sending PJREQ, if there's an error, raise exception
         try:
             self.writer.write(pj_req)
             await self.writer.drain()
         except asyncio.TimeoutError as err:
-            return f"Timeout sending PJREQ {err}", False
+            result = f"Timeout sending PJREQ {err}"
+            self.logger.error(result)
+            return result, False
 
         # see if we receive PJACK, if not, raise exception
         msg_pjack = await self.reader.read(len(self.PJ_ACK))
         if msg_pjack != self.PJ_ACK:
-            return f"Exception with PJACK: {msg_pjack}", False
-
+            result = f"Exception with PJACK: {msg_pjack}"
+            self.logger.error(result)
+            return result, False
+        self.logger.debug("Handshake successful")
         return "ok", True
 
     async def connection_lost(self):
@@ -162,16 +166,6 @@ class JVCProjector:
         self.writer.close()
         await self.writer.wait_closed()
         self._closing = False
-
-    def halt(self):
-        """Close the AVR device connection and wait for a resume() request."""
-        self.logger.warning("Halting connection to AVR")
-        self._halted = True
-
-    def resume(self):
-        """Resume the AVR device connection if we have been halted."""
-        self.logger.warning("Resuming connection to AVR")
-        self._halted = False
 
     async def _async_send_command(
         self,
@@ -244,7 +238,6 @@ class JVCProjector:
         ack: bytes,
         command_type: bytes = b"!",
     ) -> tuple[str, bool]:
-        # TODO: make this nicer
         retry_count = 0
         while retry_count < 5:
             async with self._lock:
@@ -268,18 +261,21 @@ class JVCProjector:
                 # an ack, followed by the actual message. Check to see if the ack sent by
                 # projector is correct, then return the message.
                 ack_value = (
-                    # TODO: possibly not using the right ack which is making it not read enough?
-                    Header.ack.value
-                    + Header.pj_unit.value
-                    + ack
-                    + Footer.close.value
+                    Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
                 )
                 self.logger.debug("ack_value: %s", ack_value)
 
                 # Receive the acknowledgement from PJ
                 try:
-                    received_ack = await self.reader.read(len(ack_value))
+                    # seems like certain commands timeout when PJ is off
+                    received_ack = await asyncio.wait_for(
+                        self.reader.readline(), timeout=5
+                    )
                 except asyncio.TimeoutError:
+                    # LL is used in async_update() and I don't want to spam HA logs
+                    if command == b"?\x89\x01PMLL\n":
+                        self.logger.debug("Getting LL timedout. Is PJ off?")
+                        pass
                     # Sometimes if you send a command that is greyed out, the PJ will just hang
                     result = "Connection timed out. Command is probably not allowed to run at this time."
                     self.logger.error(result)
@@ -290,6 +286,7 @@ class JVCProjector:
 
                 self.logger.debug("received_ack: %s", received_ack)
 
+                # This will probably never happen since we are handling timeouts now
                 if received_ack == b"":
                     self.logger.error("Got a blank ack. Restarting connection")
                     await self.close()
@@ -305,7 +302,7 @@ class JVCProjector:
                 # if we got what we expect and this is a reference,
                 # receive the data we requested
                 if received_ack == ack_value and command_type == Header.reference.value:
-                    message = await self.reader.read(1024)
+                    message = await self.reader.readline()
                     self.logger.debug("result: %s, %s", received_ack, message)
 
                     return message, True
