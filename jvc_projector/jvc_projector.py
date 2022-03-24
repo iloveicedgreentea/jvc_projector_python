@@ -273,14 +273,15 @@ class JVCProjector:
                         self.reader.readline(), timeout=self.command_read_timeout
                     )
                 except asyncio.TimeoutError:
-                    # LL is used in async_update() and I don't want to spam HA logs
+                    # LL is used in async_update() and I don't want to spam HA logs so we skip
                     if not command == b"?\x89\x01PMLL\n":
                         # Sometimes if you send a command that is greyed out, the PJ will just hang
-                        result = f"Connection timed out. Command {command} is probably not allowed to run at this time."
-                        self.logger.error(result)
-                    else:
-                        self.logger.debug("Getting LL timeout. Is PJ off?")
-                    return result, False
+                        self.logger.error(
+                            "Connection timed out. Command %s is probably not allowed to run at this time.",
+                            command,
+                        )
+
+                    return "timeout", False
                 except ConnectionRefusedError:
                     self.logger.error("Connection Refused when getting ack")
                     return "Connection Refused", False
