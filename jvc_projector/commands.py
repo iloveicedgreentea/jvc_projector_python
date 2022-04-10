@@ -79,11 +79,16 @@ class PictureModes(Enum):
 
 
 class MemoryModes(Enum):
-    memory1 = b"0"
-    memory2 = b"1"
-    memory3 = b"2"
-    memory4 = b"3"
-    memory5 = b"4"
+    mode1 = b"0"
+    mode2 = b"1"
+    mode3 = b"2"
+    mode4 = b"3"
+    mode5 = b"4"
+    mode6 = b"5"
+    mode7 = b"6"
+    mode8 = b"7"
+    mode9 = b"8"
+    mode10 = b"9"
 
 
 class LowLatencyModes(Enum):
@@ -198,8 +203,8 @@ class Commands(Enum):
     # power commands
     power = b"PW", PowerModes, ACKs.power_ack
 
-    # lens memory commands
-    memory = b"INML", MemoryModes, ACKs.lens_ack
+    # lens memory /installation mode commands
+    installation_mode = b"INML", MemoryModes, ACKs.lens_ack
 
     # input commands
     input = b"IP", InputModes, ACKs.input_ack

@@ -59,9 +59,9 @@ Use `print_commands()` to get all the latest support commands. This is dynamical
 ## Currently Supported Commands
 
 - Power on/off
-- Lens Memory 1-5
+- Lens Memory/Installation Modes
 - Input HDMI 1 or 2
-- Power Statuses
+- Power and Low Latency Status
 - Low Latency Mode on/off
 - Menu and arrow buttons (Menu, LRUD, back)
 - Masking
@@ -89,6 +89,18 @@ These are opinionated presets so you can have a one-click action to set your set
 - NX5/NX7/NX9
 - Most likely any other D-ILA projector, and possibly older models with ethernet cables.
 
+## Home Assistant
+
+```yaml
+# configuration.yaml
+remote:
+  - platform: jvc_projectors
+    name: nz7
+    password: password
+    host: 192.168.1.2
+    scan_interval: 30
+```
+
 ## Development
 
 ```shell
@@ -103,7 +115,12 @@ cp .env.template .env
 # edit .env with values
 ```
 
+### Adding new commands
+
+All commands are stored in Enums within `commands.py`. Add them using [this guide](http://pro.jvc.com/pro/attributes/PRESENT/manual/2018_ILA-FPJ_Ext_Command_List_v1.2.pdf) as a reference.
+
 ### Testing
+
 JVC_TEST_POWER: true/false to test power functions
 JVC_TEST_FUNCTIONS: true/false to test various button functions
 
@@ -117,18 +134,6 @@ python mock/mochrie.py
 ```shell
 # Run tests in other window
 source .env
-export JVC_HOST=127.0.0.1  
+export JVC_HOST=127.0.0.1
 make test
-```
-
-## Home Assistant
-
-```yaml
-# configuration.yaml
-remote:
-  - platform: jvc_projectors
-    name: nz7
-    password: password
-    host: 192.168.1.2
-    scan_interval: 30
 ```
