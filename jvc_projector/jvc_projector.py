@@ -190,6 +190,9 @@ class JVCProjector:
                 success flag: bool
             )
         """
+        if self.writer is None:
+            self.logger.error("Connection lost. Restarting")
+            await self.connection_lost()
 
         # Check commands
         if command_type == Header.reference.value:
