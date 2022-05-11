@@ -30,6 +30,17 @@ cmd = jvc.exec_command("picture_mode, frame_adapt_hdr")
 cmd = jvc.power_on()
 ```
 
+You can also use the async versions
+```python
+async def test():
+    jvc = JVCProjector(host=host, connect_timeout=10, password=password)
+    jvc.async_exec_command("power,on")
+
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(test())
+```
+
 ## Usage
 
 See [quick-start](#quick-start) for importing
@@ -72,16 +83,13 @@ Use `print_commands()` to get all the latest support commands. This is dynamical
 - Anamorphic modes
 - And many others
 
-## Useful Meta functions
+## Gaming/Film Modes
+I recommend setting up user presets for each mode for example
 
-These are opinionated presets so you can have a one-click action to set your settings up for the desired task. This is also supported in home assistant as a service.
+Gaming: user1, low latency on, HDR mode to HDR10, etc
+Film: user2, low latency off, HDR mode to Frame Adapt, etc
 
-- async_gaming_mode_hdr()
-- async_gaming_mode_sdr()
-- async_hdr_picture_mode()
-- async_sdr_picture_mode()
-- async_is_on()
-- async_get_low_latency_state()
+Then use the commands to switch between user modes.
 
 ## Supported Models
 
