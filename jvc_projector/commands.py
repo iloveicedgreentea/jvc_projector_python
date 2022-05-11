@@ -78,7 +78,7 @@ class PictureModes(Enum):
     pana_pq = b"16"
 
 
-class MemoryModes(Enum):
+class InstallationModes(Enum):
     mode1 = b"0"
     mode2 = b"1"
     mode3 = b"2"
@@ -204,7 +204,7 @@ class Commands(Enum):
     power = b"PW", PowerModes, ACKs.power_ack
 
     # lens memory /installation mode commands
-    installation_mode = b"INML", MemoryModes, ACKs.lens_ack
+    installation_mode = b"INML", InstallationModes, ACKs.lens_ack
 
     # input commands
     input = b"IP", InputModes, ACKs.input_ack
