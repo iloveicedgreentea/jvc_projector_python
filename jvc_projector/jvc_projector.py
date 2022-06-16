@@ -190,6 +190,10 @@ class JVCProjector:
                 success flag: bool
             )
         """
+        if self._closing:
+            self.logger.error("Connection is closing")
+            return "Connection closing", False
+            
         if self.writer is None:
             self.logger.error("Connection lost. Restarting")
             await self.connection_lost()
@@ -318,6 +322,9 @@ class JVCProjector:
                 self.logger.error(result)
                 self.logger.error("received_ack: %s", received_ack)
                 self.logger.error("ack_value: %s", ack_value)
+                # Try to restart connection, if we got here somethihng is out of sync
+                await self.close()
+                await self.connection_lost()
 
                 return result, False
         self.logger.warning("retry count for running commands exceeded")
