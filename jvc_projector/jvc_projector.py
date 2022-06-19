@@ -55,6 +55,10 @@ class JVCProjector:
         """Initiate keep-alive connection"""
         while True:
             try:
+                if self.writer is not None:
+                    self.logger.debug("Closing writer")
+                    self.writer.close()
+                    await self.writer.wait_closed()
                 self.logger.debug(
                     "Connecting to JVC Projector: %s:%s", self.host, self.port
                 )
@@ -74,8 +78,9 @@ class JVCProjector:
                 return "Connection done", True
 
             # includes conn refused
-            except OSError:
+            except OSError as err:
                 self.logger.warning("Connecting failed, retrying in %i seconds", 2)
+                self.logger.debug(err)
                 await asyncio.sleep(2)
             except asyncio.TimeoutError:
                 self.logger.warning("Connection timed out, retrying in %i seconds", 2)
