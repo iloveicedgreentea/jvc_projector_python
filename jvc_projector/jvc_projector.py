@@ -193,9 +193,10 @@ class JVCProjector:
         if self._closing:
             self.logger.error("Connection is closing")
             return "Connection closing", False
-            
+
         if self.writer is None:
             self.logger.error("Connection lost. Restarting")
+            await self.close()
             await self.connection_lost()
 
         # Check commands
@@ -259,6 +260,7 @@ class JVCProjector:
                     self.logger.error(err)
                     self.logger.debug("Restarting connection")
                     # restart the connection
+                    await self.close()
                     await self.connection_lost()
                     self.logger.debug("Sending command again")
                     # restart the loop
@@ -281,17 +283,25 @@ class JVCProjector:
                     )
                 except asyncio.TimeoutError:
                     # LL is used in async_update() and I don't want to spam HA logs so we skip
-                    if not command == b"?\x89\x01PMLL\n":
-                        # Sometimes if you send a command that is greyed out, the PJ will just hang
-                        self.logger.error(
-                            "Connection timed out. Command %s is probably not allowed to run at this time.",
-                            command,
-                        )
+                    # if not command == b"?\x89\x01PMLL\n":
+                    # Sometimes if you send a command that is greyed out, the PJ will just hang
+                    self.logger.error(
+                        "Connection timed out. Command %s is probably not allowed to run at this time.",
+                        command,
+                    )
+                    self.logger.debug("restarting connection")
+                    await self.close()
+                    await self.connection_lost()
+                    retry_count += 1
+                    continue
 
-                    return "timeout", False
                 except ConnectionRefusedError:
                     self.logger.error("Connection Refused when getting ack")
-                    return "Connection Refused", False
+                    self.logger.debug("restarting connection")
+                    await self.close()
+                    await self.connection_lost()
+                    retry_count += 1
+                    continue
 
                 self.logger.debug("received_ack: %s", received_ack)
 
@@ -320,15 +330,16 @@ class JVCProjector:
                 # Because this now reuses a connection, reaching this stage means catastrophic failure, or HA running as usual :)
                 result = "Unexpected ack received from PJ after sending a command. Perhaps a command got cancelled because a new connection was made."
                 self.logger.error(result)
-                self.logger.error("received_ack: %s", received_ack)
-                self.logger.error("ack_value: %s", ack_value)
+                self.logger.error("received ack value: %s", received_ack)
+                self.logger.error("expected ack value: %s", ack_value)
                 # Try to restart connection, if we got here somethihng is out of sync
                 await self.close()
                 await self.connection_lost()
+                retry_count += 1
+                continue
 
-                return result, False
         self.logger.warning("retry count for running commands exceeded")
-        return "", False
+        return "retry count exceeded", False
 
     async def _async_construct_command(
         self, raw_command: str, command_type: bytes
