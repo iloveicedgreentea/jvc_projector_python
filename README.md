@@ -7,8 +7,8 @@ This is designed to work with my Home Assistant plugin: https://github.com/ilove
 ## Installation
 
 ```
-# Assuming you have a venv with >=python3.9
-pip install jvc-projector-remote-improved
+# Assuming you have a venv with >=python3.10
+pip install jvc-projector-remote-improved2
 ```
 
 ## Quick Start
