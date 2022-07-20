@@ -27,11 +27,6 @@ class JVCProjector:
         self.password = password
         self.connect_timeout: int = connect_timeout
         self.logger = logger
-        # use the provided loop or get current one. Otherwise make one
-        try:
-            self._loop = loop or asyncio.get_running_loop()
-        except RuntimeError:
-            self._loop = asyncio.new_event_loop()
         self._lock = asyncio.Lock()
         # Const values
         self.PJ_OK: Final = ACKs.greeting.value
@@ -62,10 +57,7 @@ class JVCProjector:
                 self.logger.debug(
                     "Connecting to JVC Projector: %s:%s", self.host, self.port
                 )
-                # transport, protocol = await self._loop.create_connection(
-                #     lambda: self.protocol, self.host, self.port
-                # )
-                cor = asyncio.open_connection(self.host, self.port, loop=self._loop)
+                cor = asyncio.open_connection(self.host, self.port)
                 # wait for 10 sec to connect
                 self.reader, self.writer = await asyncio.wait_for(cor, 10)
                 self.logger.debug("Connected to JVC Projector")
