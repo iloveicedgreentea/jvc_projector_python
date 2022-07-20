@@ -1,2 +1,4 @@
 python-dotenv
 black
+twine
+build
