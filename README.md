@@ -193,6 +193,7 @@ LaserDimModes
         off
         auto1
         auto2
+        auto3
 LaserPowerModes
         low
         med
@@ -222,6 +223,9 @@ PictureModes
         hdr
         THX
         frame_adapt_hdr
+        frame_adapt_hdr2
+        frame_adapt_hdr3
+        filmmaker
         user1
         user2
         user3
