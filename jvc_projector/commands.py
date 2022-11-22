@@ -64,8 +64,7 @@ class PictureModes(Enum):
     cinema = b"01"
     natural = b"03"
     hdr = b"04"
-    # unsupported
-    THX = b"06"
+    THX = b"06" # unsupported
     frame_adapt_hdr = b"0B"
     user1 = b"0C"
     user2 = b"0D"
@@ -76,6 +75,9 @@ class PictureModes(Enum):
     hlg = b"14"
     hdr_plus = b"15"
     pana_pq = b"16"
+    filmmaker = b"17" # requires firmware 2.0
+    frame_adapt_hdr2 = b"18" # requires firmware 2.0
+    frame_adapt_hdr3 = b"19" # requires firmware 2.0
 
 
 class InstallationModes(Enum):
@@ -154,6 +156,7 @@ class LaserDimModes(Enum):
     off = b"0"
     auto1 = b"1"
     auto2 = b"2"
+    auto3 = b"3" # requires firmware 2.0
 
 
 class EnhanceModes(Enum):
