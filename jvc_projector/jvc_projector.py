@@ -47,20 +47,20 @@ class JVCProjector:
         return success
 
     async def reconnect(self):
-        """Initiate keep-alive connection"""
+        """Initiate keep-alive connection. This should handle any error and reconnect eventually."""
         while True:
             try:
                 if self.writer is not None:
                     self.logger.debug("Closing writer")
                     self.writer.close()
                     await self.writer.wait_closed()
-                self.logger.debug(
+                self.logger.info(
                     "Connecting to JVC Projector: %s:%s", self.host, self.port
                 )
                 cor = asyncio.open_connection(self.host, self.port)
                 # wait for 10 sec to connect
                 self.reader, self.writer = await asyncio.wait_for(cor, 10)
-                self.logger.debug("Connected to JVC Projector")
+                self.logger.info("Connected to JVC Projector")
                 # create a reader and writer to do handshake
                 self.logger.debug("Handshaking")
                 result, success = await self._async_handshake()
@@ -71,11 +71,11 @@ class JVCProjector:
 
             # includes conn refused
             except OSError as err:
-                self.logger.warning("Connecting failed, retrying in %i seconds", 2)
+                self.logger.warning("Connecting failed, retrying in 2 seconds")
                 self.logger.debug(err)
                 await asyncio.sleep(2)
             except asyncio.TimeoutError:
-                self.logger.warning("Connection timed out, retrying in %i seconds", 2)
+                self.logger.warning("Connection timed out, retrying in 2 seconds")
                 await asyncio.sleep(2)
 
     async def _async_handshake(self) -> tuple[str, bool]:

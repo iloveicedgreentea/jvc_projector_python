@@ -1,6 +1,6 @@
 # JVC Projector Remote Improved
 
-This implements new features, improvements, and optimizations based on work in https://github.com/bezmi/jvc_projector. This was made with NZ models in mind. Almost every function will work with NX models but I do not guarantee operability for them.
+This implements new features, improvements, and optimizations inspired by https://github.com/bezmi/jvc_projector. This was made with NZ models in mind. Almost every function will work with NX models but I do not guarantee operability for them.
 
 This is designed to work with my Home Assistant plugin: https://github.com/iloveicedgreentea/jvc_homeassistant
 
@@ -16,7 +16,7 @@ pip install jvc-projector-remote-improved2
 Set your network password if you have an NZ model first.
 
 ```python
-jvc = JVCProjector(host="ipaddr", connect_timeout=60, password="password")
+jvc = JVCProjector(host="ipaddr", connect_timeout=10, password="password")
 
 # Commands are passed as a single string delimited by a comma
 # Everything executes async in the background. Sync interfaces are provided
@@ -45,21 +45,21 @@ if __name__ == "__main__":
 
 See [quick-start](#quick-start) for importing
 
-The commands are structured to use simple keywords and options:
+The commands are structured to use simple command keywords and parameters. This makes it simple to remember commands. All names with spaces will have an underscore instead.
 
-```text
+```python
 Command: low_latency
-Option: off
+Parameter: off
 code: jvc.exec_command("low_latency, off")
 ```
 
-```text
+```python
 Command: picture_mode
-Option: hdr_plus
+Parameter: hdr_plus
 code: jvc.exec_command("picture_mode, hdr_plus")
 ```
 
-You can also run multiple commands in a row by just giving it a list
+You can also run multiple commands in a row by just giving it a list of commands
 
 ```python
 jvc.exec_command(["picture_mode, hdr_plus", "motion_enhance, off"])
@@ -84,12 +84,15 @@ Use `print_commands()` to get all the latest support commands. This is dynamical
 - And many others
 
 ## Gaming/Film Modes
-I recommend setting up user presets for each mode for example
+I recommend setting up picture mode presets for each mode. Low latency toggle annoyingly will not work unless certain things are disabled first. 
+It will not disable things for you. 
 
-Gaming: user1, low latency on, HDR mode to HDR10, etc
-Film: user2, low latency off, HDR mode to Frame Adapt, etc
+SDR Gaming: user1||natural, low latency on, etc
+HDR Gaming: hdr10, low latency on, etc
+SDR Film: natural||user1, low latency off, laser mode 3, motion enhance high
+HDR Film: frame adapt HDR, low latency off, laser mode 3, hdr quantization to auto(wide)
 
-Then use the commands to switch between user modes.
+Then use the commands to switch between picture modes.
 
 ## Supported Models
 
@@ -124,7 +127,7 @@ cp .env.template .env
 ```
 ## Supported Commands
 
-`$command,$mode`
+`$command,$parameter`
 example: "anamorphic,off"
 
 ```
@@ -248,7 +251,7 @@ PowerStates
 
 ### Adding new commands
 
-All commands are stored in Enums within `commands.py`. Add them using [this guide](http://pro.jvc.com/pro/attributes/PRESENT/manual/2018_ILA-FPJ_Ext_Command_List_v1.2.pdf) as a reference.
+All commands are stored in Enums within `commands.py` so simply adding them to that file in the proper Enum will automatically propagate to code. Add them using [this guide](http://pro.jvc.com/pro/attributes/PRESENT/manual/2018_ILA-FPJ_Ext_Command_List_v1.2.pdf) as a reference.
 
 ### Testing
 

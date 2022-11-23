@@ -64,8 +64,11 @@ class PictureModes(Enum):
     cinema = b"01"
     natural = b"03"
     hdr = b"04"
+    hdr10 = b"04"
     THX = b"06" # unsupported
+    thx = b"06" # unsupported
     frame_adapt_hdr = b"0B"
+    frame_adapt_hdr1 = b"0B"
     user1 = b"0C"
     user2 = b"0D"
     user3 = b"0E"
@@ -74,6 +77,7 @@ class PictureModes(Enum):
     user6 = b"11"
     hlg = b"14"
     hdr_plus = b"15"
+    hdr10_plus = b"15"
     pana_pq = b"16"
     filmmaker = b"17" # requires firmware 2.0
     frame_adapt_hdr2 = b"18" # requires firmware 2.0
