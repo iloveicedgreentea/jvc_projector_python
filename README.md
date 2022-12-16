@@ -129,6 +129,8 @@ cp .env.template .env
 
 `$command,$parameter`
 example: "anamorphic,off"
+example: "anamorphic,d"
+example: "laser_dim,auto3"
 
 ```
 Currently Supported Commands:
