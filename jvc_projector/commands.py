@@ -192,6 +192,7 @@ class AnamorphicModes(Enum):
     a = b"1"
     b = b"2"
     c = b"3"
+    d = b"4"
 
 
 class EshiftModes(Enum):

@@ -155,6 +155,7 @@ AnamorphicModes
         a
         b
         c
+        d
 ApertureModes
         off
         auto1
