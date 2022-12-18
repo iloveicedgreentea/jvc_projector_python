@@ -5,7 +5,7 @@ Implements the JVC protocol
 import logging
 from typing import Final, Union
 import asyncio
-from jvc_projector.commands import ACKs, Footer, Header, Commands, PowerStates, Enum
+from jvc_projector.commands import ACKs, Footer, Header, Commands, PowerStates, Enum, LowLatencyModes
 
 
 class JVCProjector:
@@ -419,16 +419,11 @@ class JVCProjector:
 
         None if there was an error
         """
-        state, success = await self._async_do_reference_op(
+        state, _ = await self._async_do_reference_op(
             "low_latency", ACKs.picture_ack
         )
         # LL is off, could be disabled
-        if not success:
-            return None
-        if state == b"PM0":
-            return False
-
-        return True
+        return LowLatencyModes(state.replace(ACKs.picture_ack.value, b"")).name
 
     # async def _async_check_low_latency(self) -> list[str]:
     #     """
@@ -511,8 +506,14 @@ class JVCProjector:
         """
         True if the current state is on|reserved
         """
-        pw_status = [PowerStates.on.name, PowerStates.reserved.name]
+        pw_status = [PowerStates.on.name]
         return await self._async_get_power_state() in pw_status
+    
+    async def async_is_ll_on(self) -> bool:
+        """
+        True if LL mode is on
+        """
+        return await self.async_get_low_latency_state() == LowLatencyModes.on.name
 
     def print_commands(self) -> str:
         """
