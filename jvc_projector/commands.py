@@ -27,6 +27,8 @@ class ACKs(Enum):
     greeting = b"PJ_OK"
     pj_ack = b"PJACK"
     pj_req = b"PJREQ"
+    install_acks = b"IN"
+    hdmi_ack = b"IS"
 
 
 class InputModes(Enum):
@@ -189,7 +191,17 @@ class AnamorphicModes(Enum):
     c = b"3"
     d = b"4"
 
+class ColorSpaceModes(Enum):
+    auto = b"0"
+    YCbCr444 = b"1"
+    YCbCr422 = b"2"
+    RGB = b"3"
 
+class InputLevel(Enum):
+    standard = b"0"
+    enhanced = b"1"
+    superwhite = b"2"
+    auto = b"3"
 class EshiftModes(Enum):
     off = b"0"
     on = b"1"
@@ -220,6 +232,12 @@ class Commands(Enum):
 
     # picture mode commands
     picture_mode = b"PMPM", PictureModes, ACKs.picture_ack
+    
+    # Color modes
+    color_mode = b"ISHS", ColorSpaceModes, ACKs.hdmi_ack
+
+    # input_level like 0-255
+    input_level = b"ISIL", InputLevel, ACKs.hdmi_ack
 
     # low latency enable/disable
     low_latency = b"PMLL", LowLatencyModes, ACKs.picture_ack
@@ -240,7 +258,7 @@ class Commands(Enum):
     menu = b"RC73", MenuModes, ACKs.menu_ack
 
     # NZ Series Laser Dimming commands
-    laser_dim = b"PMDC", LaserDimModes, ACKs.picture_ack
+    laser_mode = b"PMDC", LaserDimModes, ACKs.picture_ack
 
     # Lens Aperture commands
     aperture = b"PMDI", ApertureModes, ACKs.picture_ack
@@ -250,4 +268,4 @@ class Commands(Enum):
     anamorphic = b"INVS", AnamorphicModes, ACKs.lens_ack
 
     # e-shift
-    eshift = b"PMUS", EshiftModes, ACKs.picture_ack
+    eshift_mode = b"PMUS", EshiftModes, ACKs.picture_ack

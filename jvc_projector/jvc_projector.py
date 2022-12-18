@@ -5,7 +5,7 @@ Implements the JVC protocol
 import logging
 from typing import Final, Union
 import asyncio
-from jvc_projector.commands import ACKs, Footer, Header, Commands, PowerStates, Enum, LowLatencyModes
+from jvc_projector.commands import InputLevel, ColorSpaceModes,EshiftModes ,ACKs, Footer, Header, Commands, PowerStates, PictureModes, InstallationModes, InputModes, LaserDimModes, Enum, LowLatencyModes
 
 
 class JVCProjector:
@@ -417,14 +417,88 @@ class JVCProjector:
         """
         Get the current state of LL
 
-        None if there was an error
         """
         state, _ = await self._async_do_reference_op(
             "low_latency", ACKs.picture_ack
         )
         # LL is off, could be disabled
         return LowLatencyModes(state.replace(ACKs.picture_ack.value, b"")).name
+    
+    async def async_get_picture_mode(self) -> str:
+        """
+        Get the current picture mode as str -> user1, natural
 
+        """
+        state, _ = await self._async_do_reference_op(
+            "picture_mode", ACKs.picture_ack
+        )
+        # LL is off, could be disabled
+        return PictureModes(state.replace(ACKs.picture_ack.value, b"")).name
+    
+    async def async_get_install_mode(self) -> str:
+        """
+        Get the current install mode as str
+
+        """
+        state, _ = await self._async_do_reference_op(
+            "installation_mode", ACKs.install_acks
+        )
+        # LL is off, could be disabled
+        return InstallationModes(state.replace(ACKs.install_acks.value, b"")).name
+    
+    async def async_get_input_mode(self) -> str:
+        """
+        Get the current input mode
+
+        """
+        state, _ = await self._async_do_reference_op(
+            "input_mode", ACKs.input_ack
+        )
+        # LL is off, could be disabled
+        return InputModes(state.replace(ACKs.input_ack.value, b"")).name
+    
+    async def async_get_laser_mode(self) -> str:
+        """
+        Get the current laser mode
+
+        """
+        state, _ = await self._async_do_reference_op(
+            "laser_mode", ACKs.picture_ack
+        )
+        # LL is off, could be disabled
+        return LaserDimModes(state.replace(ACKs.picture_ack.value, b"")).name
+    
+    async def async_get_eshift_mode(self) -> str:
+        """
+        Get the current eshift mode
+
+        """
+        state, _ = await self._async_do_reference_op(
+            "eshift_mode", ACKs.picture_ack
+        )
+        # LL is off, could be disabled
+        return EshiftModes(state.replace(ACKs.picture_ack.value, b"")).name
+   
+    async def async_get_color_mode(self) -> str:
+        """
+        Get the current color mode
+
+        """
+        state, _ = await self._async_do_reference_op(
+            "color_mode", ACKs.hdmi_ack
+        )
+        return ColorSpaceModes(state.replace(ACKs.hdmi_ack.value, b"")).name
+    
+    async def async_get_input_level(self) -> str:
+        """
+        Get the current input level
+
+        """
+        state, _ = await self._async_do_reference_op(
+            "input_level", ACKs.hdmi_ack
+        )
+        # LL is off, could be disabled
+        return InputLevel(state.replace(ACKs.hdmi_ack.value, b"")).name
     # async def _async_check_low_latency(self) -> list[str]:
     #     """
     #     Infer if Low Latency is disabled or not otherwise commands will hang
