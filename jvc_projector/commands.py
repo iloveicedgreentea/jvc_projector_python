@@ -27,6 +27,8 @@ class ACKs(Enum):
     greeting = b"PJ_OK"
     pj_ack = b"PJACK"
     pj_req = b"PJREQ"
+    install_acks = b"IN"
+    hdmi_ack = b"IS"
 
 
 class InputModes(Enum):
@@ -42,7 +44,6 @@ class PowerModes(Enum):
     """
     Powermodes on/off: 1/0
     """
-
     off = b"0"
     on = b"1"
 
@@ -65,7 +66,6 @@ class PictureModes(Enum):
     natural = b"03"
     hdr = b"04"
     hdr10 = b"04"
-    THX = b"06" # unsupported
     thx = b"06" # unsupported
     frame_adapt_hdr = b"0B"
     frame_adapt_hdr1 = b"0B"
@@ -102,7 +102,6 @@ class LowLatencyModes(Enum):
     Low latency requires certain options turned off first
     It is not a function. Will not work without disabling
     CMD, dynamic ctrl, others
-    Use the low latency provided function instead
     """
 
     off = b"0"
@@ -110,14 +109,12 @@ class LowLatencyModes(Enum):
 
 
 class MotionEnhanceModes(Enum):
-
     off = b"0"
     low = b"1"
     high = b"2"
 
 
 class GraphicModeModes(Enum):
-
     standard = b"0"
     hires1 = b"1"
     hires2 = b"2"
@@ -194,7 +191,17 @@ class AnamorphicModes(Enum):
     c = b"3"
     d = b"4"
 
+class ColorSpaceModes(Enum):
+    auto = b"0"
+    YCbCr444 = b"1"
+    YCbCr422 = b"2"
+    RGB = b"3"
 
+class InputLevel(Enum):
+    standard = b"0"
+    enhanced = b"1"
+    superwhite = b"2"
+    auto = b"3"
 class EshiftModes(Enum):
     off = b"0"
     on = b"1"
@@ -215,7 +222,7 @@ class Commands(Enum):
     installation_mode = b"INML", InstallationModes, ACKs.lens_ack
 
     # input commands
-    input = b"IP", InputModes, ACKs.input_ack
+    input_mode = b"IP", InputModes, ACKs.input_ack
 
     # status commands - Reference: ?
     # These should not be used directly
@@ -225,6 +232,12 @@ class Commands(Enum):
 
     # picture mode commands
     picture_mode = b"PMPM", PictureModes, ACKs.picture_ack
+    
+    # Color modes
+    color_mode = b"ISHS", ColorSpaceModes, ACKs.hdmi_ack
+
+    # input_level like 0-255
+    input_level = b"ISIL", InputLevel, ACKs.hdmi_ack
 
     # low latency enable/disable
     low_latency = b"PMLL", LowLatencyModes, ACKs.picture_ack
@@ -245,7 +258,7 @@ class Commands(Enum):
     menu = b"RC73", MenuModes, ACKs.menu_ack
 
     # NZ Series Laser Dimming commands
-    laser_dim = b"PMDC", LaserDimModes, ACKs.picture_ack
+    laser_mode = b"PMDC", LaserDimModes, ACKs.picture_ack
 
     # Lens Aperture commands
     aperture = b"PMDI", ApertureModes, ACKs.picture_ack
@@ -255,4 +268,4 @@ class Commands(Enum):
     anamorphic = b"INVS", AnamorphicModes, ACKs.lens_ack
 
     # e-shift
-    eshift = b"PMUS", EshiftModes, ACKs.picture_ack
+    eshift_mode = b"PMUS", EshiftModes, ACKs.picture_ack

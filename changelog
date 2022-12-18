@@ -1,0 +1,7 @@
+# 3.0.0
+
+## BREAKING CHANGES
+
+### Commands
+`input` renamed to `input_mode`
+`laser_dim` renamed to `laser_mode`
