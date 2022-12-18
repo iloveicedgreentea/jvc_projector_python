@@ -388,6 +388,16 @@ class JVCProjector:
         Turns off PJ
         """
         return await self.async_exec_command("power,off")
+    
+    async def _async_replace_headers(self, item: bytes) -> bytes:
+        """
+        Will strip all headers and returns the value itself
+        """
+        headers = [x.value for x in Header] + [x.value for x in Footer]
+        for header in headers:
+            item = item.replace(header, b"")
+
+        return item
 
     async def _async_do_reference_op(self, command: str, ack: ACKs) -> tuple[str, bool]:
         cmd = (
@@ -416,73 +426,61 @@ class JVCProjector:
     async def async_get_low_latency_state(self) -> bool:
         """
         Get the current state of LL
-
         """
         state, _ = await self._async_do_reference_op(
             "low_latency", ACKs.picture_ack
         )
-        # LL is off, could be disabled
+
         return LowLatencyModes(state.replace(ACKs.picture_ack.value, b"")).name
     
     async def async_get_picture_mode(self) -> str:
         """
         Get the current picture mode as str -> user1, natural
-
         """
         state, _ = await self._async_do_reference_op(
             "picture_mode", ACKs.picture_ack
         )
-        # LL is off, could be disabled
         return PictureModes(state.replace(ACKs.picture_ack.value, b"")).name
     
     async def async_get_install_mode(self) -> str:
         """
         Get the current install mode as str
-
         """
         state, _ = await self._async_do_reference_op(
             "installation_mode", ACKs.install_acks
         )
-        # LL is off, could be disabled
         return InstallationModes(state.replace(ACKs.install_acks.value, b"")).name
     
     async def async_get_input_mode(self) -> str:
         """
         Get the current input mode
-
         """
         state, _ = await self._async_do_reference_op(
             "input_mode", ACKs.input_ack
         )
-        # LL is off, could be disabled
         return InputModes(state.replace(ACKs.input_ack.value, b"")).name
     
     async def async_get_laser_mode(self) -> str:
         """
         Get the current laser mode
-
         """
         state, _ = await self._async_do_reference_op(
             "laser_mode", ACKs.picture_ack
         )
-        # LL is off, could be disabled
         return LaserDimModes(state.replace(ACKs.picture_ack.value, b"")).name
     
     async def async_get_eshift_mode(self) -> str:
         """
         Get the current eshift mode
-
         """
         state, _ = await self._async_do_reference_op(
             "eshift_mode", ACKs.picture_ack
         )
-        # LL is off, could be disabled
         return EshiftModes(state.replace(ACKs.picture_ack.value, b"")).name
    
     async def async_get_color_mode(self) -> str:
         """
         Get the current color mode
-
         """
         state, _ = await self._async_do_reference_op(
             "color_mode", ACKs.hdmi_ack
@@ -492,57 +490,11 @@ class JVCProjector:
     async def async_get_input_level(self) -> str:
         """
         Get the current input level
-
         """
         state, _ = await self._async_do_reference_op(
             "input_level", ACKs.hdmi_ack
         )
-        # LL is off, could be disabled
         return InputLevel(state.replace(ACKs.hdmi_ack.value, b"")).name
-    # async def _async_check_low_latency(self) -> list[str]:
-    #     """
-    #     Infer if Low Latency is disabled or not otherwise commands will hang
-
-    #     Returns enabled modes that have to be disabled first
-    #     """
-    #     enabled_modes = []
-
-    #     state = await self.get_low_latency_state()
-    #     # LL is off, could be disabled
-    #     if state:
-    #         state, success = await self._async_do_reference_op(
-    #             "laser_dim", ACKs.picture_ack
-    #         )
-    #         if success:
-    #             if state != b"PM0":
-    #                 self.logger.debug("Laser dimming is enabled")
-    #                 enabled_modes.append("laser_dim")
-    #         else:
-    #             return "Error", state
-    #         # see if its hdr10+ or frame adapt
-    #         state, success = await self._async_do_reference_op(
-    #             "picture_mode", ACKs.picture_ack
-    #         )
-    #         if success:
-    #             if state in [b"PM0B", b"PM15"]:
-    #                 self.logger.debug("Locked HDR is enabled")
-    #                 enabled_modes.append("picture_mode")
-    #         else:
-    #             return "Error", state
-
-    #     self.logger.debug("Low Latency check: %s", success)
-
-    #     return enabled_modes
-
-    async def _async_replace_headers(self, item: bytes) -> bytes:
-        """
-        Will strip all headers and returns the value itself
-        """
-        headers = [x.value for x in Header] + [x.value for x in Footer]
-        for header in headers:
-            item = item.replace(header, b"")
-
-        return item
 
     async def _async_get_power_state(self) -> str:
         """
