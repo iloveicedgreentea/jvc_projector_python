@@ -42,7 +42,6 @@ class PowerModes(Enum):
     """
     Powermodes on/off: 1/0
     """
-
     off = b"0"
     on = b"1"
 
@@ -65,7 +64,6 @@ class PictureModes(Enum):
     natural = b"03"
     hdr = b"04"
     hdr10 = b"04"
-    THX = b"06" # unsupported
     thx = b"06" # unsupported
     frame_adapt_hdr = b"0B"
     frame_adapt_hdr1 = b"0B"
@@ -102,7 +100,6 @@ class LowLatencyModes(Enum):
     Low latency requires certain options turned off first
     It is not a function. Will not work without disabling
     CMD, dynamic ctrl, others
-    Use the low latency provided function instead
     """
 
     off = b"0"
@@ -110,14 +107,12 @@ class LowLatencyModes(Enum):
 
 
 class MotionEnhanceModes(Enum):
-
     off = b"0"
     low = b"1"
     high = b"2"
 
 
 class GraphicModeModes(Enum):
-
     standard = b"0"
     hires1 = b"1"
     hires2 = b"2"
@@ -215,7 +210,7 @@ class Commands(Enum):
     installation_mode = b"INML", InstallationModes, ACKs.lens_ack
 
     # input commands
-    input = b"IP", InputModes, ACKs.input_ack
+    input_mode = b"IP", InputModes, ACKs.input_ack
 
     # status commands - Reference: ?
     # These should not be used directly
