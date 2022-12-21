@@ -222,7 +222,7 @@ class JVCProjector:
             # Receive the acknowledgement from PJ
             try:
                 # seems like certain commands timeout when PJ is off
-                received_ack = self.client.recv(1000)
+                received_ack = self.client.recv(len(ack_value))
             except TimeoutError:
                 # LL is used in async_update() and I don't want to spam HA logs so we skip
                 # if not command == b"?\x89\x01PMLL\n":
@@ -262,7 +262,7 @@ class JVCProjector:
             # if we got what we expect and this is a reference,
             # receive the data we requested
             if received_ack == ack_value and command_type == Header.reference.value:
-                message = self.client.recv(1000)
+                message = self.client.recv(len(ack_value))
                 self.logger.debug("received message from PJ: %s", message)
 
                 return message, True
@@ -270,7 +270,7 @@ class JVCProjector:
             # Otherwise, it failed
             # Because this now reuses a connection, reaching this stage means catastrophic failure, or HA running as usual :)
             self.logger.error(
-                "Recieved ack did not match expected ack: %s != %s",
+                "Received ack did not match expected ack: %s != %s",
                 received_ack,
                 ack_value,
             )
