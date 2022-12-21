@@ -1,20 +1,16 @@
 import unittest
 import os
-from datetime import datetime
 from dotenv import load_dotenv
 from jvc_projector.jvc_projector import JVCProjector
-import asyncio
 
 # load .env
 load_dotenv()
 
 password = os.getenv("JVC_PASSWORD")
 host = os.getenv("JVC_HOST")
-test_power = True if os.getenv("JVC_TEST_POWER") == "true" else False
 
 # JVC will drop connection without throttling in place
-loop = asyncio.get_event_loop()
-jvc = JVCProjector(host=host, connect_timeout=60, password=password, loop=loop)
+jvc = JVCProjector(host=host, connect_timeout=10, password=password)
 
 
 class TestFunctions(unittest.TestCase):
@@ -30,5 +26,17 @@ class TestFunctions(unittest.TestCase):
     #     self.assertEqual(state, True)
 
     def test_02lowlat(self):
-        out = asyncio.run(jvc.async_get_eshift_mode())
+        out = jvc.get_eshift_mode()
+        print(out)
+        out = jvc.get_input_level()
+        print(out)
+        out = jvc.get_install_mode()
+        print(out)
+        out = jvc.get_laser_mode()
+        print(out)
+        out = jvc.is_on()
+        print(out)
+        out = jvc.is_ll_on()
+        print(out)
+        out = jvc.info()
         print(out)
