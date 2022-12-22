@@ -36,7 +36,7 @@ class TestFunctions(unittest.TestCase):
         self.assertEqual(laser_mode, "auto3")
         self.assertEqual(eshift, "off")
         self.assertEqual(color_mode, "auto")
-        self.assertEqual(input_level, "auto")
+        self.assertEqual(input_level, "standard")
     
     def test_send_command(self):
         """test a command"""
