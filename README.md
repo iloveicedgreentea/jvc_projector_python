@@ -152,17 +152,17 @@ Currently Supported Commands:
 
 
 Currently Supported Parameters:
-AnamorphicModes
+anamorphic:
         off
         a
         b
         c
         d
-ApertureModes
+aperture:
         off
         auto1
         auto2
-EnhanceModes
+enhance:
         zero
         one
         two
@@ -174,17 +174,17 @@ EnhanceModes
         eight
         nine
         ten
-EshiftModes
+eshift:
         off
         on
-GraphicModeModes
+graphic_mode:
         standard
         hires1
         hires2
-InputModes
+input:
         hdmi1
         hdmi2
-InstallationModes
+installation_mode:
         mode1
         mode2
         mode3
@@ -195,22 +195,22 @@ InstallationModes
         mode8
         mode9
         mode10
-LaserDimModes
+laser_dim:
         off
         auto1
         auto2
         auto3
-LaserPowerModes
+laser_power:
         low
         med
         high
-LowLatencyModes
+low_latency:
         off
         on
-MaskModes
+mask:
         on
         off
-MenuModes
+menu:
         menu
         up
         down
@@ -218,11 +218,11 @@ MenuModes
         left
         right
         ok
-MotionEnhanceModes
+motion_enhance:
         off
         low
         high
-PictureModes
+picture_mode:
         film
         cinema
         natural
@@ -241,15 +241,9 @@ PictureModes
         hlg
         hdr_plus
         pana_pq
-PowerModes
+power:
         off
         on
-PowerStates
-        standby
-        on
-        cooling
-        reserved
-        emergency
 ```
 
 ### Adding new commands
