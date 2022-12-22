@@ -1,34 +1,52 @@
 import unittest
 import os
-from datetime import datetime
 from dotenv import load_dotenv
 from jvc_projector.jvc_projector import JVCProjector
-import asyncio
 
 # load .env
 load_dotenv()
 
 password = os.getenv("JVC_PASSWORD")
 host = os.getenv("JVC_HOST")
-test_power = True if os.getenv("JVC_TEST_POWER") == "true" else False
 
 # JVC will drop connection without throttling in place
-loop = asyncio.get_event_loop()
-jvc = JVCProjector(host=host, connect_timeout=60, password=password, loop=loop)
-
+jvc = JVCProjector(host=host, connect_timeout=10, password=password)
+jvc.open_connection()
 
 class TestFunctions(unittest.TestCase):
     """
     Test projector
     """
-    # def test_01power_state(self):
-    #     """
-    #     The PJ should report True for is_on state
-    #     """
-    #     state = asyncio.run(jvc.async_is_on())
-        
-    #     self.assertEqual(state, True)
+    def test_mock_update(self):
+        """Emulates how HA would run updates"""
+        state = jvc.is_on()
+        self.assertEqual(state, True)
+        if state:
+            lowlatency_enabled = jvc.is_ll_on()
+            installation_mode = jvc.get_install_mode()
+            input_mode = jvc.get_input_mode()
+            laser_mode = jvc.get_laser_mode()
+            eshift = jvc.get_eshift_mode()
+            color_mode = jvc.get_color_mode()
+            input_level = jvc.get_input_level()
 
-    def test_02lowlat(self):
-        out = asyncio.run(jvc.async_get_eshift_mode())
-        print(out)
+        self.assertFalse(lowlatency_enabled)
+        self.assertEqual(installation_mode, "mode3")
+        self.assertEqual(input_mode, "hdmi2")
+        self.assertEqual(laser_mode, "auto3")
+        self.assertEqual(eshift, "off")
+        self.assertEqual(color_mode, "auto")
+        self.assertEqual(input_level, "standard")
+    
+    def test_send_command(self):
+        """test a command"""
+        # open menu
+        ack, success = jvc.exec_command("menu, menu")
+
+        self.assertEqual(ack, "ok")
+        self.assertTrue(success)
+
+        # close menu
+        ack, success = jvc.exec_command("menu, menu")
+        self.assertEqual(ack, "ok")
+        self.assertTrue(success)

@@ -4,7 +4,8 @@ Implements the JVC protocol
 
 import logging
 from typing import Final, Union
-import asyncio
+import socket
+import time
 from jvc_projector.commands import InputLevel, ColorSpaceModes,EshiftModes ,ACKs, Footer, Header, Commands, PowerStates, PictureModes, InstallationModes, InputModes, LaserDimModes, Enum, LowLatencyModes
 
 
@@ -17,7 +18,6 @@ class JVCProjector:
         password: str = "",
         # Can supply a logger object. It can hook into the HA logger
         logger: logging.Logger = logging.getLogger(__name__),
-        loop: asyncio.AbstractEventLoop = None,
         port: int = 20554,
         connect_timeout: int = 10,
     ):
@@ -27,58 +27,54 @@ class JVCProjector:
         self.password = password
         self.connect_timeout: int = connect_timeout
         self.logger = logger
-        self._lock = asyncio.Lock()
         # Const values
         self.PJ_OK: Final = ACKs.greeting.value
         self.PJ_ACK: Final = ACKs.pj_ack.value
         self.PJ_REQ: Final = ACKs.pj_req.value
-        self.reader: asyncio.StreamReader = None
-        self.writer: asyncio.StreamWriter = None
+        self.client = None
         self.command_read_timeout = 3
 
-    async def async_open_connection(self) -> bool:
+    def open_connection(self) -> bool:
         """Open a connection"""
         self.logger.debug("Starting open connection")
-        msg, success = await self.reconnect()
+        msg, success = self.reconnect()
 
         if not success:
             self.logger.error(msg)
 
         return success
 
-    async def reconnect(self):
+    def reconnect(self):
         """Initiate keep-alive connection. This should handle any error and reconnect eventually."""
         while True:
             try:
-                if self.writer is not None:
-                    self.logger.debug("Closing writer")
-                    self.writer.close()
-                    await self.writer.wait_closed()
                 self.logger.info(
                     "Connecting to JVC Projector: %s:%s", self.host, self.port
                 )
-                cor = asyncio.open_connection(self.host, self.port)
-                # wait for 10 sec to connect
-                self.reader, self.writer = await asyncio.wait_for(cor, 10)
+                self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.client.settimeout(10)
+                
+                self.client.connect((self.host, self.port))
                 self.logger.info("Connected to JVC Projector")
+
                 # create a reader and writer to do handshake
                 self.logger.debug("Handshaking")
-                result, success = await self._async_handshake()
+                result, success = self._handshake()
                 if not success:
                     return result, success
                 self.logger.debug("Handshake complete and we are connected")
                 return "Connection done", True
 
             # includes conn refused
+            except TimeoutError:
+                self.logger.warning("Connection timed out, retrying in 2 seconds")
+                time.sleep(2)
             except OSError as err:
                 self.logger.warning("Connecting failed, retrying in 2 seconds")
                 self.logger.debug(err)
-                await asyncio.sleep(2)
-            except asyncio.TimeoutError:
-                self.logger.warning("Connection timed out, retrying in 2 seconds")
-                await asyncio.sleep(2)
+                time.sleep(2)
 
-    async def _async_handshake(self) -> tuple[str, bool]:
+    def _handshake(self) -> tuple[str, bool]:
         """
         Do the 3 way handshake
 
@@ -92,7 +88,7 @@ class JVCProjector:
             pj_req = self.PJ_REQ
 
         # 3 step handshake
-        msg_pjok = await self.reader.read(len(self.PJ_OK))
+        msg_pjok = self.client.recv(len(self.PJ_OK))
         self.logger.debug(msg_pjok)
         if msg_pjok != self.PJ_OK:
             result = f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
@@ -100,16 +96,11 @@ class JVCProjector:
             return result, False
 
         # try sending PJREQ, if there's an error, raise exception
-        try:
-            self.writer.write(pj_req)
-            await self.writer.drain()
-        except asyncio.TimeoutError as err:
-            result = f"Timeout sending PJREQ {err}"
-            self.logger.error(result)
-            return result, False
-
+        # TODO: error handling
+        self.client.sendall(pj_req)
+        
         # see if we receive PJACK, if not, raise exception
-        msg_pjack = await self.reader.read(len(self.PJ_ACK))
+        msg_pjack = self.client.recv(len(self.PJ_ACK))
         if msg_pjack != self.PJ_ACK:
             result = f"Exception with PJACK: {msg_pjack}"
             self.logger.error(result)
@@ -117,7 +108,23 @@ class JVCProjector:
         self.logger.debug("Handshake successful")
         return "ok", True
 
-    async def _async_send_command(
+    def _check_closed(self) -> bool:
+        try:
+            # this will try to read bytes without blocking and also without removing them from buffer (peek only)
+            data = self.client.recv(16, socket.MSG_DONTWAIT | socket.MSG_PEEK)
+            if len(data) == 0:
+                return True
+        except BlockingIOError:
+            return False  # socket is open and reading from it would block
+        except ConnectionResetError:
+            return True  # socket was closed for some other reason
+        except OSError:
+            self.logger.warning("Socket not connected")
+            return False
+
+        return False
+
+    def _send_command(
         self,
         send_command: Union[list[bytes], bytes],
         command_type: bytes = b"!",
@@ -139,15 +146,12 @@ class JVCProjector:
                 success flag: bool
             )
         """
-
-        if self.writer is None:
-            self.logger.error("Connection lost. Restarting")
-
-            await self.reconnect()
-
         # Check commands
+        self.logger.debug("Command_type: %s", command_type)
+        self.logger.debug("Send command: %s", send_command)
+        self.logger.debug("Send ack: %s", ack)
         if command_type == Header.reference.value:
-            result, success = await self._async_do_command(
+            result, success = self._do_command(
                 send_command, ack, command_type
             )
 
@@ -155,21 +159,21 @@ class JVCProjector:
 
         if isinstance(send_command, list):
             for cmd in send_command:
-                cons_command, ack = await self._async_construct_command(
+                cons_command, ack = self._construct_command(
                     cmd, command_type
                 )
                 if not ack:
                     return cons_command, ack
                 # need a delay otherwise it kills connection
-                await asyncio.sleep(0.1)
-                result, success = await self._async_do_command(
+                time.sleep(0.1)
+                result, success = self._do_command(
                     cons_command, ack.value, command_type
                 )
                 if not success:
                     return result, success
         else:
             try:
-                cons_command, ack = await self._async_construct_command(
+                cons_command, ack = self._construct_command(
                     send_command, command_type
                 )
             except TypeError:
@@ -177,7 +181,7 @@ class JVCProjector:
 
             if not ack:
                 return cons_command, ack
-            result, success = await self._async_do_command(
+            result, success = self._do_command(
                 cons_command, ack.value, command_type
             )
             if not success:
@@ -186,26 +190,29 @@ class JVCProjector:
         self.logger.debug("send command result: %s", result)
         return "ok", True
 
-    async def _async_do_command(
+    def _do_command(
         self,
         command: bytes,
         ack: bytes,
         command_type: bytes = b"!",
     ) -> tuple[str, bool]:
         retry_count = 0
+        if self.client is None:
+            self.logger.debug("Forming connection")
+            self.reconnect()
+
         while retry_count < 5:
             self.logger.debug("do_command sending command: %s", command)
             # send the command
-            self.writer.write(command)
             try:
-                await self.writer.drain()
+                self.client.sendall(command)
             except ConnectionError as err:
                 # reaching this means the writer was closed somewhere
                 self.logger.error(err)
-                self.logger.debug("Restarting connection")
+                # self.logger.debug("Restarting connection")
                 # restart the connection
-
-                await self.reconnect()
+                self.client.close()
+                self.reconnect()
                 self.logger.debug("Sending command again")
                 # restart the loop
                 retry_count += 1
@@ -222,28 +229,26 @@ class JVCProjector:
             # Receive the acknowledgement from PJ
             try:
                 # seems like certain commands timeout when PJ is off
-                received_ack = await asyncio.wait_for(
-                    self.reader.readline(), timeout=self.command_read_timeout
-                )
-            except asyncio.TimeoutError:
-                # LL is used in async_update() and I don't want to spam HA logs so we skip
-                # if not command == b"?\x89\x01PMLL\n":
-                # Sometimes if you send a command that is greyed out, the PJ will just hang
+                received_ack = self.client.recv(len(ack_value))
+                # second_message = self.client.recv(len(ack_value))
+                # self.logger.debug(f"two ack: {two}")
+            except socket.timeout:
                 self.logger.error(
                     "Connection timed out. Command %s is probably not allowed to run at this time.",
                     command,
                 )
                 self.logger.debug("restarting connection")
-
-                await self.reconnect()
-                retry_count += 1
-                continue
+                self.client.close()
+                self.reconnect()
+                # don't retry a timeout
+                retry_count += 10
+                return
 
             except ConnectionRefusedError:
                 self.logger.error("Connection Refused when getting ack")
                 self.logger.debug("restarting connection")
-
-                await self.reconnect()
+                self.client.close()
+                self.reconnect()
                 retry_count += 1
                 continue
 
@@ -252,8 +257,8 @@ class JVCProjector:
             # This will probably never happen since we are handling timeouts now
             if received_ack == b"":
                 self.logger.error("Got a blank ack. Restarting connection")
-
-                await self.reconnect()
+                self.client.close()
+                self.reconnect()
                 retry_count += 1
                 continue
 
@@ -264,28 +269,32 @@ class JVCProjector:
             # if we got what we expect and this is a reference,
             # receive the data we requested
             if received_ack == ack_value and command_type == Header.reference.value:
-                message = await self.reader.readline()
+                # Need to read +1 because it sends a \n at the end.... probably a code smell
+                message = self.client.recv(len(ack_value)+1)
                 self.logger.debug("received message from PJ: %s", message)
 
                 return message, True
 
+            # if second_message == b"\n":
+            #     retry_count += 1
+            #     continue
             # Otherwise, it failed
             # Because this now reuses a connection, reaching this stage means catastrophic failure, or HA running as usual :)
             self.logger.error(
-                "Recieved ack did not match expected ack: %s != %s",
+                "Received ack did not match expected ack: %s != %s",
                 received_ack,
                 ack_value,
             )
             # Try to restart connection, if we got here somethihng is out of sync
-
-            await self.reconnect()
+            self.client.close()
+            self.reconnect()
             retry_count += 1
             continue
 
         self.logger.error("retry count for running commands exceeded")
-        return "retry count exceeded", False
+        return "retry count exceeded", None
 
-    async def _async_construct_command(
+    def _construct_command(
         self, raw_command: str, command_type: bytes
     ) -> tuple[bytes, ACKs]:
         """
@@ -317,15 +326,6 @@ class JVCProjector:
         self, command: Union[list[str], str], command_type: bytes = b"!"
     ) -> tuple[str, bool]:
         """
-        Sync wrapper for async_exec_command
-        """
-
-        return asyncio.run(self.async_exec_command(command, command_type))
-
-    async def async_exec_command(
-        self, command: Union[list[str], str], command_type: bytes = b"!"
-    ) -> tuple[str, bool]:
-        """
         Wrapper for _send_command()
 
         command: a str of the command and value, separated by a comma ("power,on").
@@ -340,9 +340,9 @@ class JVCProjector:
             )
         """
         self.logger.debug("exec_command Executing command: %s", command)
-        return await self._async_send_command(command, command_type)
+        return  self._send_command(command, command_type)
 
-    async def async_info(self) -> tuple[str, bool]:
+    def info(self) -> tuple[str, bool]:
         """
         Bring up the Info screen
         """
@@ -353,7 +353,7 @@ class JVCProjector:
             + Footer.close.value
         )
 
-        return await self._async_send_command(
+        return self._send_command(
             cmd,
             ack=ACKs.menu_ack,
             command_type=Header.operation.value,
@@ -363,33 +363,17 @@ class JVCProjector:
         self,
     ) -> tuple[str, bool]:
         """
-        sync wrapper for async_power_on
-        """
-        return asyncio.run(self.async_power_on())
-
-    async def async_power_on(
-        self,
-    ) -> tuple[str, bool]:
-        """
         Turns on PJ
         """
-        return await self.async_exec_command("power,on")
+        return self.exec_command("power,on")
 
-    def power_off(
-        self,
-    ) -> tuple[str, bool]:
-        """
-        sync wrapper for async_power_off
-        """
-        return asyncio.run(self.async_power_off())
-
-    async def async_power_off(self) -> tuple[str, bool]:
+    def power_off(self) -> tuple[str, bool]:
         """
         Turns off PJ
         """
-        return await self.async_exec_command("power,off")
+        return self.exec_command("power,off")
     
-    async def _async_replace_headers(self, item: bytes) -> bytes:
+    def _replace_headers(self, item: bytes) -> bytes:
         """
         Will strip all headers and returns the value itself
         """
@@ -399,7 +383,7 @@ class JVCProjector:
 
         return item
 
-    async def _async_do_reference_op(self, command: str, ack: ACKs) -> tuple[str, bool]:
+    def _do_reference_op(self, command: str, ack: ACKs) -> tuple[str, bool]:
         cmd = (
             Header.reference.value
             + Header.pj_unit.value
@@ -407,96 +391,91 @@ class JVCProjector:
             + Footer.close.value
         )
 
-        msg, success = await self._async_send_command(
+        msg, success = self._send_command(
             cmd,
             ack=ACKs[ack.name].value,
             command_type=Header.reference.value,
         )
 
         if success:
-            msg = await self._async_replace_headers(msg)
+            msg = self._replace_headers(msg)
 
         return msg, success
 
-    def get_low_latency_state(self) -> bool:
-        """Get the current state of LL"""
-
-        return asyncio.run(self.async_get_low_latency_state())
-
-    async def async_get_low_latency_state(self) -> bool:
+    def get_low_latency_state(self) -> str:
         """
         Get the current state of LL
         """
-        state, _ = await self._async_do_reference_op(
+        state, _ = self._do_reference_op(
             "low_latency", ACKs.picture_ack
         )
 
         return LowLatencyModes(state.replace(ACKs.picture_ack.value, b"")).name
     
-    async def async_get_picture_mode(self) -> str:
+    def get_picture_mode(self) -> str:
         """
         Get the current picture mode as str -> user1, natural
         """
-        state, _ = await self._async_do_reference_op(
+        state, _ = self._do_reference_op(
             "picture_mode", ACKs.picture_ack
         )
         return PictureModes(state.replace(ACKs.picture_ack.value, b"")).name
     
-    async def async_get_install_mode(self) -> str:
+    def get_install_mode(self) -> str:
         """
         Get the current install mode as str
         """
-        state, _ = await self._async_do_reference_op(
+        state, _ = self._do_reference_op(
             "installation_mode", ACKs.install_acks
         )
         return InstallationModes(state.replace(ACKs.install_acks.value, b"")).name
     
-    async def async_get_input_mode(self) -> str:
+    def get_input_mode(self) -> str:
         """
         Get the current input mode
         """
-        state, _ = await self._async_do_reference_op(
+        state, _ = self._do_reference_op(
             "input_mode", ACKs.input_ack
         )
         return InputModes(state.replace(ACKs.input_ack.value, b"")).name
     
-    async def async_get_laser_mode(self) -> str:
+    def get_laser_mode(self) -> str:
         """
         Get the current laser mode
         """
-        state, _ = await self._async_do_reference_op(
+        state, _ = self._do_reference_op(
             "laser_mode", ACKs.picture_ack
         )
         return LaserDimModes(state.replace(ACKs.picture_ack.value, b"")).name
     
-    async def async_get_eshift_mode(self) -> str:
+    def get_eshift_mode(self) -> str:
         """
         Get the current eshift mode
         """
-        state, _ = await self._async_do_reference_op(
+        state, _ = self._do_reference_op(
             "eshift_mode", ACKs.picture_ack
         )
         return EshiftModes(state.replace(ACKs.picture_ack.value, b"")).name
    
-    async def async_get_color_mode(self) -> str:
+    def get_color_mode(self) -> str:
         """
         Get the current color mode
         """
-        state, _ = await self._async_do_reference_op(
+        state, _ = self._do_reference_op(
             "color_mode", ACKs.hdmi_ack
         )
         return ColorSpaceModes(state.replace(ACKs.hdmi_ack.value, b"")).name
     
-    async def async_get_input_level(self) -> str:
+    def get_input_level(self) -> str:
         """
         Get the current input level
         """
-        state, _ = await self._async_do_reference_op(
+        state, _ = self._do_reference_op(
             "input_level", ACKs.hdmi_ack
         )
         return InputLevel(state.replace(ACKs.hdmi_ack.value, b"")).name
 
-    async def _async_get_power_state(self) -> str:
+    def _get_power_state(self) -> str:
         """
         Return the current power state
 
@@ -512,7 +491,7 @@ class JVCProjector:
         )
         # try in case we get conn refused
         # Try to prevent power state flapping
-        msg, success = await self._async_send_command(
+        msg, success = self._send_command(
             cmd,
             ack=ACKs.power_ack.value,
             command_type=Header.reference.value,
@@ -524,22 +503,22 @@ class JVCProjector:
             return success
 
         # remove the headers
-        state = await self._async_replace_headers(msg)
+        state = self._replace_headers(msg)
 
         return PowerStates(state.replace(ACKs.power_ack.value, b"")).name
 
-    async def async_is_on(self) -> bool:
+    def is_on(self) -> bool:
         """
         True if the current state is on|reserved
         """
         pw_status = [PowerStates.on.name]
-        return await self._async_get_power_state() in pw_status
+        return self._get_power_state() in pw_status
     
-    async def async_is_ll_on(self) -> bool:
+    def is_ll_on(self) -> bool:
         """
         True if LL mode is on
         """
-        return await self.async_get_low_latency_state() == LowLatencyModes.on.name
+        return self.get_low_latency_state() == LowLatencyModes.on.name
 
     def print_commands(self) -> str:
         """
