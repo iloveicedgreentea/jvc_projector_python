@@ -19,7 +19,6 @@ Set your network password if you have an NZ model first.
 jvc = JVCProjector(host="ipaddr", connect_timeout=10, password="password")
 
 # Commands are passed as a single string delimited by a comma
-# Everything executes async in the background. Sync interfaces are provided
 # open menu
 cmd = jvc.exec_command("menu, menu")
 # press left button
@@ -28,17 +27,6 @@ cmd = jvc.exec_command("menu, left")
 cmd = jvc.exec_command("picture_mode, frame_adapt_hdr")
 # turn on
 cmd = jvc.power_on()
-```
-
-You can also use the async versions
-```python
-async def test():
-    jvc = JVCProjector(host=host, connect_timeout=10, password=password)
-    jvc.async_exec_command("power,on")
-
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(test())
 ```
 
 ## Usage
