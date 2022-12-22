@@ -31,8 +31,7 @@ class JVCProjector:
         self.PJ_OK: Final = ACKs.greeting.value
         self.PJ_ACK: Final = ACKs.pj_ack.value
         self.PJ_REQ: Final = ACKs.pj_req.value
-        self.client = socket.socket()
-        self.client.settimeout(10)
+        self.client = None
         self.command_read_timeout = 3
 
     def open_connection(self) -> bool:
@@ -52,7 +51,9 @@ class JVCProjector:
                 self.logger.info(
                     "Connecting to JVC Projector: %s:%s", self.host, self.port
                 )
-
+                self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.client.settimeout(10)
+                
                 self.client.connect((self.host, self.port))
                 self.logger.info("Connected to JVC Projector")
 
@@ -146,6 +147,9 @@ class JVCProjector:
             )
         """
         # Check commands
+        self.logger.debug("Command_type: %s", command_type)
+        self.logger.debug("Send command: %s", send_command)
+        self.logger.debug("Send ack: %s", ack)
         if command_type == Header.reference.value:
             result, success = self._do_command(
                 send_command, ack, command_type
@@ -193,7 +197,10 @@ class JVCProjector:
         command_type: bytes = b"!",
     ) -> tuple[str, bool]:
         retry_count = 0
-        
+        if self.client is None:
+            self.logger.debug("Forming connection")
+            self.reconnect()
+
         while retry_count < 5:
             self.logger.debug("do_command sending command: %s", command)
             # send the command
@@ -202,9 +209,9 @@ class JVCProjector:
             except ConnectionError as err:
                 # reaching this means the writer was closed somewhere
                 self.logger.error(err)
-                self.logger.debug("Restarting connection")
+                # self.logger.debug("Restarting connection")
                 # restart the connection
-
+                self.client.close()
                 self.reconnect()
                 self.logger.debug("Sending command again")
                 # restart the loop
@@ -223,24 +230,24 @@ class JVCProjector:
             try:
                 # seems like certain commands timeout when PJ is off
                 received_ack = self.client.recv(len(ack_value))
-            except TimeoutError:
-                # LL is used in async_update() and I don't want to spam HA logs so we skip
-                # if not command == b"?\x89\x01PMLL\n":
-                # Sometimes if you send a command that is greyed out, the PJ will just hang
+                # second_message = self.client.recv(len(ack_value))
+                # self.logger.debug(f"two ack: {two}")
+            except socket.timeout:
                 self.logger.error(
                     "Connection timed out. Command %s is probably not allowed to run at this time.",
                     command,
                 )
                 self.logger.debug("restarting connection")
-
+                self.client.close()
                 self.reconnect()
-                retry_count += 1
-                continue
+                # don't retry a timeout
+                retry_count += 10
+                return
 
             except ConnectionRefusedError:
                 self.logger.error("Connection Refused when getting ack")
                 self.logger.debug("restarting connection")
-
+                self.client.close()
                 self.reconnect()
                 retry_count += 1
                 continue
@@ -250,7 +257,7 @@ class JVCProjector:
             # This will probably never happen since we are handling timeouts now
             if received_ack == b"":
                 self.logger.error("Got a blank ack. Restarting connection")
-
+                self.client.close()
                 self.reconnect()
                 retry_count += 1
                 continue
@@ -262,11 +269,15 @@ class JVCProjector:
             # if we got what we expect and this is a reference,
             # receive the data we requested
             if received_ack == ack_value and command_type == Header.reference.value:
-                message = self.client.recv(len(ack_value))
+                # Need to read +1 because it sends a \n at the end.... probably a code smell
+                message = self.client.recv(len(ack_value)+1)
                 self.logger.debug("received message from PJ: %s", message)
 
                 return message, True
 
+            # if second_message == b"\n":
+            #     retry_count += 1
+            #     continue
             # Otherwise, it failed
             # Because this now reuses a connection, reaching this stage means catastrophic failure, or HA running as usual :)
             self.logger.error(
@@ -275,13 +286,13 @@ class JVCProjector:
                 ack_value,
             )
             # Try to restart connection, if we got here somethihng is out of sync
-
+            self.client.close()
             self.reconnect()
             retry_count += 1
             continue
 
         self.logger.error("retry count for running commands exceeded")
-        return "retry count exceeded", False
+        return "retry count exceeded", None
 
     def _construct_command(
         self, raw_command: str, command_type: bytes
@@ -391,7 +402,7 @@ class JVCProjector:
 
         return msg, success
 
-    def get_low_latency_state(self) -> bool:
+    def get_low_latency_state(self) -> str:
         """
         Get the current state of LL
         """

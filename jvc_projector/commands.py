@@ -206,8 +206,7 @@ class EshiftModes(Enum):
     off = b"0"
     on = b"1"
 
-
-# TODO: add check for model and modify commands for it
+# Checking for model code
 # command -> \x3F\x89\x01\x4D\x44\x0A
 # ack -> \x06\x89\x01\x4D\x44\x0A
 # response -> \x40\x89\x01\x4D\x44(the model code)\x0A
