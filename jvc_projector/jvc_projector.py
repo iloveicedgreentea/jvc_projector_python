@@ -33,6 +33,8 @@ class JVCProjector:
         self.PJ_REQ: Final = ACKs.pj_req.value
         self.client = None
         self.command_read_timeout = 3
+        # NZ or NX (NP5 is classified as NX)
+        self.model_family = ""
 
     def open_connection(self) -> bool:
         """Open a connection"""
@@ -96,17 +98,39 @@ class JVCProjector:
             return result, False
 
         # try sending PJREQ, if there's an error, raise exception
-        # TODO: error handling
-        self.client.sendall(pj_req)
-        
-        # see if we receive PJACK, if not, raise exception
-        msg_pjack = self.client.recv(len(self.PJ_ACK))
-        if msg_pjack != self.PJ_ACK:
-            result = f"Exception with PJACK: {msg_pjack}"
-            self.logger.error(result)
-            return result, False
-        self.logger.debug("Handshake successful")
+        try:
+            self.client.sendall(pj_req)
+            
+            # see if we receive PJACK, if not, raise exception
+            msg_pjack = self.client.recv(len(self.PJ_ACK))
+            if msg_pjack != self.PJ_ACK:
+                result = f"Exception with PJACK: {msg_pjack}"
+                self.logger.error(result)
+                return result, False
+            self.logger.debug("Handshake successful")
+        except socket.timeout:
+            return "handshake timeout", False
+        # TODO: Get model family
+        self.model_family = self._get_modelfamily()
+        self.logger.debug("Model code is %s", self.model_family)
         return "ok", True
+
+    def _get_modelfamily(self) -> str:
+        cmd = (
+            Header.reference.value
+            + Header.pj_unit.value
+            + Commands.get_model.value
+            + Footer.close.value
+        )
+
+        res, _ = self._send_command(
+            cmd,
+            command_type=Header.reference.value,
+            ack=ACKs.model.value,
+        )
+        nz_models = ["B5A3", "B5A2", "B5A1"]
+        # check if last 4 are in the nz list
+        return  "NZ" if self._replace_headers(res).decode()[-4:] in nz_models else "NX"
 
     def _check_closed(self) -> bool:
         try:
@@ -229,7 +253,7 @@ class JVCProjector:
             # Receive the acknowledgement from PJ
             try:
                 # seems like certain commands timeout when PJ is off
-                received_ack = self.client.recv(len(ack_value))
+                received_ack = self.client.recv(1000)
                 # second_message = self.client.recv(len(ack_value))
                 # self.logger.debug(f"two ack: {two}")
             except socket.timeout:
@@ -270,7 +294,7 @@ class JVCProjector:
             # receive the data we requested
             if received_ack == ack_value and command_type == Header.reference.value:
                 # Need to read +1 because it sends a \n at the end.... probably a code smell
-                message = self.client.recv(len(ack_value)+1)
+                message = self.client.recv(1000)
                 self.logger.debug("received message from PJ: %s", message)
 
                 return message, True

@@ -14,7 +14,7 @@ class Header(Enum):
 
 
 class Footer(Enum):
-    close = b"\x0a"
+    close = b"\x0A"
 
 
 class ACKs(Enum):
@@ -29,6 +29,7 @@ class ACKs(Enum):
     pj_req = b"PJREQ"
     install_acks = b"IN"
     hdmi_ack = b"IS"
+    model = b"MD"
 
 
 class InputModes(Enum):
@@ -206,13 +207,9 @@ class EshiftModes(Enum):
     off = b"0"
     on = b"1"
 
-# Checking for model code
-# command -> \x3F\x89\x01\x4D\x44\x0A
-# ack -> \x06\x89\x01\x4D\x44\x0A
-# response -> \x40\x89\x01\x4D\x44(the model code)\x0A
-
 
 class Commands(Enum):
+    
     # these use ! unless otherwise indicated
     # power commands
     power = b"PW", PowerModes, ACKs.power_ack
@@ -228,6 +225,10 @@ class Commands(Enum):
     power_status = b"PW"
     current_output = b"IP"
     info = b"RC7374"
+
+    # Checking for model code
+    # response -> \x40\x89\x01\x4D\x44(the model code)\x0A
+    get_model = b"MD"
 
     # picture mode commands
     picture_mode = b"PMPM", PictureModes, ACKs.picture_ack

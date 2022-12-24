@@ -17,6 +17,7 @@ class TestFunctions(unittest.TestCase):
     """
     Test projector
     """
+
     def test_mock_update(self):
         """Emulates how HA would run updates"""
         state = jvc.is_on()
