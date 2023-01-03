@@ -110,7 +110,7 @@ class JVCProjector:
             self.logger.debug("Handshake successful")
         except socket.timeout:
             return "handshake timeout", False
-        # TODO: Get model family
+        # Get model family
         self.model_family = self._get_modelfamily()
         self.logger.debug("Model code is %s", self.model_family)
         return "ok", True
@@ -219,7 +219,7 @@ class JVCProjector:
         command: bytes,
         ack: bytes,
         command_type: bytes = b"!",
-    ) -> tuple[str, bool]:
+    ) -> tuple[Union[str, bytes], bool]:
         retry_count = 0
         if self.client is None:
             self.logger.debug("Forming connection")
@@ -252,10 +252,8 @@ class JVCProjector:
 
             # Receive the acknowledgement from PJ
             try:
-                # seems like certain commands timeout when PJ is off
-                received_ack = self.client.recv(1000)
-                # second_message = self.client.recv(len(ack_value))
-                # self.logger.debug(f"two ack: {two}")
+                # most commands timeout when PJ is off
+                received_msg = self.client.recv(len(ack_value))
             except socket.timeout:
                 self.logger.error(
                     "Connection timed out. Command %s is probably not allowed to run at this time.",
@@ -269,44 +267,39 @@ class JVCProjector:
                 return
 
             except ConnectionRefusedError:
-                self.logger.error("Connection Refused when getting ack")
+                self.logger.error("Connection Refused when getting msg")
                 self.logger.debug("restarting connection")
                 self.client.close()
                 self.reconnect()
                 retry_count += 1
                 continue
 
-            self.logger.debug("received ack from PJ: %s", received_ack)
+            self.logger.debug("received msg from PJ: %s", received_msg)
 
-            # This will probably never happen since we are handling timeouts now
-            if received_ack == b"":
-                self.logger.error("Got a blank ack. Restarting connection")
+            # This is unlikely to happen unless we read blank response
+            if received_msg == b"":
+                self.logger.error("Got a blank msg. Restarting connection")
                 self.client.close()
                 self.reconnect()
                 retry_count += 1
                 continue
 
             # get the ack for operation
-            if received_ack == ack_value and command_type == Header.operation.value:
-                return received_ack, True
+            if received_msg == ack_value and command_type == Header.operation.value:
+                return received_msg, True
 
             # if we got what we expect and this is a reference,
             # receive the data we requested
-            if received_ack == ack_value and command_type == Header.reference.value:
-                # Need to read +1 because it sends a \n at the end.... probably a code smell
+            if received_msg == ack_value and command_type == Header.reference.value:
                 message = self.client.recv(1000)
                 self.logger.debug("received message from PJ: %s", message)
 
                 return message, True
 
-            # if second_message == b"\n":
-            #     retry_count += 1
-            #     continue
-            # Otherwise, it failed
             # Because this now reuses a connection, reaching this stage means catastrophic failure, or HA running as usual :)
             self.logger.error(
                 "Received ack did not match expected ack: %s != %s",
-                received_ack,
+                received_msg,
                 ack_value,
             )
             # Try to restart connection, if we got here somethihng is out of sync
