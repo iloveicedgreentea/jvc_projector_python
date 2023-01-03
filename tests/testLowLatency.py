@@ -22,6 +22,8 @@ class TestFunctions(unittest.TestCase):
         """Emulates how HA would run updates"""
         state = jvc.is_on()
         self.assertEqual(state, True)
+        self.assertEqual(jvc.model_family, "NZ")
+
         if state:
             lowlatency_enabled = jvc.is_ll_on()
             installation_mode = jvc.get_install_mode()
