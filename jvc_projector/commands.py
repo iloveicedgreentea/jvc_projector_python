@@ -45,6 +45,7 @@ class PowerModes(Enum):
     """
     Powermodes on/off: 1/0
     """
+
     off = b"0"
     on = b"1"
 
@@ -67,7 +68,7 @@ class PictureModes(Enum):
     natural = b"03"
     hdr = b"04"
     hdr10 = b"04"
-    thx = b"06" # unsupported
+    thx = b"06"  # unsupported
     frame_adapt_hdr = b"0B"
     frame_adapt_hdr1 = b"0B"
     user1 = b"0C"
@@ -80,9 +81,9 @@ class PictureModes(Enum):
     hdr_plus = b"15"
     hdr10_plus = b"15"
     pana_pq = b"16"
-    filmmaker = b"17" # requires firmware 2.0
-    frame_adapt_hdr2 = b"18" # requires firmware 2.0
-    frame_adapt_hdr3 = b"19" # requires firmware 2.0
+    filmmaker = b"17"  # requires firmware 2.0
+    frame_adapt_hdr2 = b"18"  # requires firmware 2.0
+    frame_adapt_hdr3 = b"19"  # requires firmware 2.0
 
 
 class InstallationModes(Enum):
@@ -158,7 +159,7 @@ class LaserDimModes(Enum):
     off = b"0"
     auto1 = b"1"
     auto2 = b"2"
-    auto3 = b"3" # requires firmware 2.0
+    auto3 = b"3"  # requires firmware 2.0
 
 
 class EnhanceModes(Enum):
@@ -192,24 +193,48 @@ class AnamorphicModes(Enum):
     c = b"3"
     d = b"4"
 
+
 class ColorSpaceModes(Enum):
     auto = b"0"
     YCbCr444 = b"1"
     YCbCr422 = b"2"
     RGB = b"3"
 
+
 class InputLevel(Enum):
     standard = b"0"
     enhanced = b"1"
     superwhite = b"2"
     auto = b"3"
+
+
 class EshiftModes(Enum):
     off = b"0"
     on = b"1"
 
 
+class ContentTypes(Enum):
+    auto = b"0"
+    sdr = b"1"
+    hdr10_plus = b"2"
+    hdr10 = b"3"
+    hlg = b"4"
+
+
+class HdrProcessing(Enum):
+    hdr10_plus = b"0"
+    static = b"1"
+    frame_by_frame = b"2"
+    scene_by_scene = b"3"
+
+
+class TheaterOptimizer(Enum):
+    off = b"0"
+    on = b"1"
+
+
 class Commands(Enum):
-    
+
     # these use ! unless otherwise indicated
     # power commands
     power = b"PW", PowerModes, ACKs.power_ack
@@ -230,9 +255,18 @@ class Commands(Enum):
     # response -> \x40\x89\x01\x4D\x44(the model code)\x0A
     get_model = b"MD"
 
+    # content type
+    content_type = b"PMCT", ContentTypes, ACKs.picture_ack
+
+    # hdr processing (like frame by frame)
+    hdr_processing = b"PMHP", HdrProcessing, ACKs.picture_ack
+
+    # theater optimizer on/off
+    theater_optimizer = b"PMNM", TheaterOptimizer, ACKs.picture_ack
+
     # picture mode commands
     picture_mode = b"PMPM", PictureModes, ACKs.picture_ack
-    
+
     # Color modes
     color_mode = b"ISHS", ColorSpaceModes, ACKs.hdmi_ack
 
