@@ -29,6 +29,7 @@ class ACKs(Enum):
     pj_req = b"PJREQ"
     install_acks = b"IN"
     hdmi_ack = b"IS"
+    hdr_ack = b"IF"
     model = b"MD"
 
 
@@ -232,6 +233,17 @@ class TheaterOptimizer(Enum):
     off = b"0"
     on = b"1"
 
+class LampPowerModes(Enum):
+    normal = b"0"
+    high = b"1"
+
+class HdrData(Enum):
+    sdr = b"0"
+    hdr = b"1"
+    smpte = b"2"
+    hybridlog = b"3"
+    hdr10_plus = b"4"
+    none = b"F"
 
 class Commands(Enum):
 
@@ -260,6 +272,9 @@ class Commands(Enum):
 
     # hdr processing (like frame by frame)
     hdr_processing = b"PMHP", HdrProcessing, ACKs.picture_ack
+
+    # NX models hdr data
+    hdr_data = b"IFHR", HdrData, ACKs.hdr_ack
 
     # theater optimizer on/off
     theater_optimizer = b"PMNM", TheaterOptimizer, ACKs.picture_ack
@@ -293,6 +308,9 @@ class Commands(Enum):
 
     # NZ Series Laser Dimming commands
     laser_mode = b"PMDC", LaserDimModes, ACKs.picture_ack
+
+    # Lamp power
+    lamp_mode = b"PMLP", LampPowerModes, ACKs.picture_ack
 
     # Lens Aperture commands
     aperture = b"PMDI", ApertureModes, ACKs.picture_ack

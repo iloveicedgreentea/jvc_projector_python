@@ -24,6 +24,7 @@ from jvc_projector.commands import (
     ContentTypes,
     HdrProcessing,
     TheaterOptimizer,
+    HdrData
 )
 
 
@@ -499,6 +500,13 @@ class JVCProjector:
         """
         state, _ = self._do_reference_op("hdr_processing", ACKs.picture_ack)
         return HdrProcessing(state.replace(ACKs.picture_ack.value, b"")).name
+
+    def get_hdr_data(self) -> str:
+        """
+        Get the current hdr mode -> sdr, hdr10_plus, etc
+        """
+        state, _ = self._do_reference_op("hdr_data", ACKs.hdr_ack)
+        return HdrData(state.replace(ACKs.hdr_ack.value, b"")).name
 
     def get_theater_optimizer_state(self) -> str:
         """
