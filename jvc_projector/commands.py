@@ -310,7 +310,7 @@ class Commands(Enum):
     laser_mode = b"PMDC", LaserDimModes, ACKs.picture_ack
 
     # Lamp power
-    lamp_mode = b"PMLP", LampPowerModes, ACKs.picture_ack
+    lamp_power = b"PMLP", LampPowerModes, ACKs.picture_ack
 
     # Lens Aperture commands
     aperture = b"PMDI", ApertureModes, ACKs.picture_ack

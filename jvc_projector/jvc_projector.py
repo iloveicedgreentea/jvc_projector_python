@@ -24,7 +24,8 @@ from jvc_projector.commands import (
     ContentTypes,
     HdrProcessing,
     TheaterOptimizer,
-    HdrData
+    HdrData,
+    LampPowerModes
 )
 
 
@@ -147,9 +148,20 @@ class JVCProjector:
             command_type=Header.reference.value,
             ack=ACKs.model.value,
         )
-        nz_models = ["B5A3", "B5A2", "B5A1"]
-        # check if last 4 are in the nz list
-        return "NZ" if self._replace_headers(res).decode()[-4:] in nz_models else "NX"
+        models = {
+            "B5A1": "NZ9",
+            "B5A2": "NZ8",
+            "B5A3": "NZ7",
+            "A2B1": "NX9",
+            "A2B2": "NX7",
+            "A2B3": "NX5",
+            "B5B1": "NP5"
+        }
+        model_res = self._replace_headers(res).decode()
+        self.logger.debug(model_res)
+
+        # get last 4 char of response and look up value
+        return models.get(model_res[-4:])
 
     def _check_closed(self) -> bool:
         try:
@@ -166,6 +178,12 @@ class JVCProjector:
             return False
 
         return False
+
+    def close_connection(self):
+        """
+        Only useful for testing
+        """
+        self.client.close()
 
     def _send_command(
         self,
@@ -507,6 +525,13 @@ class JVCProjector:
         """
         state, _ = self._do_reference_op("hdr_data", ACKs.hdr_ack)
         return HdrData(state.replace(ACKs.hdr_ack.value, b"")).name
+
+    def get_lamp_power(self) -> str:
+        """
+        Get the current lamp power non-NZ only
+        """
+        state, _ = self._do_reference_op("lamp_power", ACKs.picture_ack)
+        return LampPowerModes(state.replace(ACKs.picture_ack.value, b"")).name
 
     def get_theater_optimizer_state(self) -> str:
         """
