@@ -32,14 +32,16 @@ class TestFunctions(unittest.TestCase):
             eshift = jvc.get_eshift_mode()
             color_mode = jvc.get_color_mode()
             input_level = jvc.get_input_level()
+            content_type = jvc.get_content_type()
 
-        self.assertFalse(lowlatency_enabled)
-        self.assertEqual(installation_mode, "mode3")
-        self.assertEqual(input_mode, "hdmi2")
-        self.assertEqual(laser_mode, "auto3")
-        self.assertEqual(eshift, "off")
-        self.assertEqual(color_mode, "auto")
-        self.assertEqual(input_level, "standard")
+            self.assertFalse(lowlatency_enabled)
+            self.assertEqual(installation_mode, "mode3")
+            self.assertEqual(input_mode, "hdmi2")
+            self.assertEqual(laser_mode, "auto3")
+            self.assertEqual(eshift, "off")
+            self.assertEqual(color_mode, "auto")
+            self.assertEqual(input_level, "standard")
+            self.assertEqual(content_type, "sdr")
     
     def test_send_command(self):
         """test a command"""

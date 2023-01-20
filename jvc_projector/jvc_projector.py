@@ -6,7 +6,25 @@ import logging
 from typing import Final, Union
 import socket
 import time
-from jvc_projector.commands import InputLevel, ColorSpaceModes,EshiftModes ,ACKs, Footer, Header, Commands, PowerStates, PictureModes, InstallationModes, InputModes, LaserDimModes, Enum, LowLatencyModes
+from jvc_projector.commands import (
+    InputLevel,
+    ColorSpaceModes,
+    EshiftModes,
+    ACKs,
+    Footer,
+    Header,
+    Commands,
+    PowerStates,
+    PictureModes,
+    InstallationModes,
+    InputModes,
+    LaserDimModes,
+    Enum,
+    LowLatencyModes,
+    ContentTypes,
+    HdrProcessing,
+    TheaterOptimizer,
+)
 
 
 class JVCProjector:
@@ -19,7 +37,7 @@ class JVCProjector:
         # Can supply a logger object. It can hook into the HA logger
         logger: logging.Logger = logging.getLogger(__name__),
         port: int = 20554,
-        connect_timeout: int = 10,
+        connect_timeout: int = 5,
     ):
         self.host = host
         self.port = port
@@ -54,8 +72,8 @@ class JVCProjector:
                     "Connecting to JVC Projector: %s:%s", self.host, self.port
                 )
                 self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.client.settimeout(10)
-                
+                self.client.settimeout(self.connect_timeout)
+
                 self.client.connect((self.host, self.port))
                 self.logger.info("Connected to JVC Projector")
 
@@ -100,7 +118,7 @@ class JVCProjector:
         # try sending PJREQ, if there's an error, raise exception
         try:
             self.client.sendall(pj_req)
-            
+
             # see if we receive PJACK, if not, raise exception
             msg_pjack = self.client.recv(len(self.PJ_ACK))
             if msg_pjack != self.PJ_ACK:
@@ -130,7 +148,7 @@ class JVCProjector:
         )
         nz_models = ["B5A3", "B5A2", "B5A1"]
         # check if last 4 are in the nz list
-        return  "NZ" if self._replace_headers(res).decode()[-4:] in nz_models else "NX"
+        return "NZ" if self._replace_headers(res).decode()[-4:] in nz_models else "NX"
 
     def _check_closed(self) -> bool:
         try:
@@ -175,17 +193,13 @@ class JVCProjector:
         self.logger.debug("Send command: %s", send_command)
         self.logger.debug("Send ack: %s", ack)
         if command_type == Header.reference.value:
-            result, success = self._do_command(
-                send_command, ack, command_type
-            )
+            result, success = self._do_command(send_command, ack, command_type)
 
             return result, success
 
         if isinstance(send_command, list):
             for cmd in send_command:
-                cons_command, ack = self._construct_command(
-                    cmd, command_type
-                )
+                cons_command, ack = self._construct_command(cmd, command_type)
                 if not ack:
                     return cons_command, ack
                 # need a delay otherwise it kills connection
@@ -197,17 +211,13 @@ class JVCProjector:
                     return result, success
         else:
             try:
-                cons_command, ack = self._construct_command(
-                    send_command, command_type
-                )
+                cons_command, ack = self._construct_command(send_command, command_type)
             except TypeError:
                 cons_command = send_command
 
             if not ack:
                 return cons_command, ack
-            result, success = self._do_command(
-                cons_command, ack.value, command_type
-            )
+            result, success = self._do_command(cons_command, ack.value, command_type)
             if not success:
                 return result, success
 
@@ -256,14 +266,14 @@ class JVCProjector:
                 received_msg = self.client.recv(len(ack_value))
             except socket.timeout:
                 self.logger.error(
-                    "Connection timed out. Command %s is probably not allowed to run at this time.",
+                    # TODO: this may be happening because something else read the response?
+                    "Connection timed out. Command %s may not be allowed to run at this time or something else is running already.",
                     command,
                 )
                 self.logger.debug("restarting connection")
                 self.client.close()
                 self.reconnect()
-                # don't retry a timeout
-                retry_count += 10
+                retry_count += 1
                 return
 
             except ConnectionRefusedError:
@@ -357,7 +367,7 @@ class JVCProjector:
             )
         """
         self.logger.debug("exec_command Executing command: %s", command)
-        return  self._send_command(command, command_type)
+        return self._send_command(command, command_type)
 
     def info(self) -> tuple[str, bool]:
         """
@@ -389,7 +399,7 @@ class JVCProjector:
         Turns off PJ
         """
         return self.exec_command("power,off")
-    
+
     def _replace_headers(self, item: bytes) -> bytes:
         """
         Will strip all headers and returns the value itself
@@ -423,74 +433,79 @@ class JVCProjector:
         """
         Get the current state of LL
         """
-        state, _ = self._do_reference_op(
-            "low_latency", ACKs.picture_ack
-        )
+        state, _ = self._do_reference_op("low_latency", ACKs.picture_ack)
 
         return LowLatencyModes(state.replace(ACKs.picture_ack.value, b"")).name
-    
+
     def get_picture_mode(self) -> str:
         """
         Get the current picture mode as str -> user1, natural
         """
-        state, _ = self._do_reference_op(
-            "picture_mode", ACKs.picture_ack
-        )
+        state, _ = self._do_reference_op("picture_mode", ACKs.picture_ack)
         return PictureModes(state.replace(ACKs.picture_ack.value, b"")).name
-    
+
     def get_install_mode(self) -> str:
         """
         Get the current install mode as str
         """
-        state, _ = self._do_reference_op(
-            "installation_mode", ACKs.install_acks
-        )
+        state, _ = self._do_reference_op("installation_mode", ACKs.install_acks)
         return InstallationModes(state.replace(ACKs.install_acks.value, b"")).name
-    
+
     def get_input_mode(self) -> str:
         """
         Get the current input mode
         """
-        state, _ = self._do_reference_op(
-            "input_mode", ACKs.input_ack
-        )
+        state, _ = self._do_reference_op("input_mode", ACKs.input_ack)
         return InputModes(state.replace(ACKs.input_ack.value, b"")).name
-    
+
     def get_laser_mode(self) -> str:
         """
         Get the current laser mode
         """
-        state, _ = self._do_reference_op(
-            "laser_mode", ACKs.picture_ack
-        )
+        state, _ = self._do_reference_op("laser_mode", ACKs.picture_ack)
         return LaserDimModes(state.replace(ACKs.picture_ack.value, b"")).name
-    
+
     def get_eshift_mode(self) -> str:
         """
         Get the current eshift mode
         """
-        state, _ = self._do_reference_op(
-            "eshift_mode", ACKs.picture_ack
-        )
+        state, _ = self._do_reference_op("eshift_mode", ACKs.picture_ack)
         return EshiftModes(state.replace(ACKs.picture_ack.value, b"")).name
-   
+
     def get_color_mode(self) -> str:
         """
         Get the current color mode
         """
-        state, _ = self._do_reference_op(
-            "color_mode", ACKs.hdmi_ack
-        )
+        state, _ = self._do_reference_op("color_mode", ACKs.hdmi_ack)
         return ColorSpaceModes(state.replace(ACKs.hdmi_ack.value, b"")).name
-    
+
     def get_input_level(self) -> str:
         """
         Get the current input level
         """
-        state, _ = self._do_reference_op(
-            "input_level", ACKs.hdmi_ack
-        )
+        state, _ = self._do_reference_op("input_level", ACKs.hdmi_ack)
         return InputLevel(state.replace(ACKs.hdmi_ack.value, b"")).name
+
+    def get_content_type(self) -> str:
+        """
+        Get the current content type
+        """
+        state, _ = self._do_reference_op("content_type", ACKs.picture_ack)
+        return ContentTypes(state.replace(ACKs.picture_ack.value, b"")).name
+
+    def get_hdr_processing(self) -> str:
+        """
+        Get the current hdr processing setting like frame by frame. Will fail if not in HDR mode!
+        """
+        state, _ = self._do_reference_op("hdr_processing", ACKs.picture_ack)
+        return HdrProcessing(state.replace(ACKs.picture_ack.value, b"")).name
+
+    def get_theater_optimizer_state(self) -> str:
+        """
+        If theater optimizer is on/off Will fail if not in HDR mode!
+        """
+        state, _ = self._do_reference_op("theater_optimizer", ACKs.picture_ack)
+        return TheaterOptimizer(state.replace(ACKs.picture_ack.value, b"")).name
 
     def _get_power_state(self) -> str:
         """
@@ -530,7 +545,7 @@ class JVCProjector:
         """
         pw_status = [PowerStates.on.name]
         return self._get_power_state() in pw_status
-    
+
     def is_ll_on(self) -> bool:
         """
         True if LL mode is on
