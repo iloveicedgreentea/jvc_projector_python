@@ -37,7 +37,7 @@ class JVCProjector:
         # Can supply a logger object. It can hook into the HA logger
         logger: logging.Logger = logging.getLogger(__name__),
         port: int = 20554,
-        connect_timeout: int = 10,
+        connect_timeout: int = 5,
     ):
         self.host = host
         self.port = port
@@ -72,7 +72,7 @@ class JVCProjector:
                     "Connecting to JVC Projector: %s:%s", self.host, self.port
                 )
                 self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.client.settimeout(10)
+                self.client.settimeout(self.connect_timeout)
 
                 self.client.connect((self.host, self.port))
                 self.logger.info("Connected to JVC Projector")
@@ -272,8 +272,7 @@ class JVCProjector:
                 self.logger.debug("restarting connection")
                 self.client.close()
                 self.reconnect()
-                # don't retry a timeout
-                retry_count += 10
+                retry_count += 1
                 return
 
             except ConnectionRefusedError:
