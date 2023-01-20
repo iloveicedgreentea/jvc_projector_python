@@ -266,7 +266,8 @@ class JVCProjector:
                 received_msg = self.client.recv(len(ack_value))
             except socket.timeout:
                 self.logger.error(
-                    "Connection timed out. Command %s is probably not allowed to run at this time.",
+                    # TODO: this may be happening because something else read the response?
+                    "Connection timed out. Command %s may not be allowed to run at this time or something else is running already.",
                     command,
                 )
                 self.logger.debug("restarting connection")
@@ -494,14 +495,14 @@ class JVCProjector:
 
     def get_hdr_processing(self) -> str:
         """
-        Get the current hdr processing setting like frame by frame
+        Get the current hdr processing setting like frame by frame. Will fail if not in HDR mode!
         """
         state, _ = self._do_reference_op("hdr_processing", ACKs.picture_ack)
         return HdrProcessing(state.replace(ACKs.picture_ack.value, b"")).name
 
     def get_theater_optimizer_state(self) -> str:
         """
-        If theater optimizer is on/off
+        If theater optimizer is on/off Will fail if not in HDR mode!
         """
         state, _ = self._do_reference_op("theater_optimizer", ACKs.picture_ack)
         return TheaterOptimizer(state.replace(ACKs.picture_ack.value, b"")).name
