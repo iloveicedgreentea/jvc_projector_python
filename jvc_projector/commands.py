@@ -273,7 +273,7 @@ class Commands(Enum):
     # hdr processing (like frame by frame)
     hdr_processing = b"PMHP", HdrProcessing, ACKs.picture_ack
 
-    # NX models hdr data
+    # hdr data
     hdr_data = b"IFHR", HdrData, ACKs.hdr_ack
 
     # theater optimizer on/off
