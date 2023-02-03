@@ -25,7 +25,8 @@ from jvc_projector.commands import (
     HdrProcessing,
     TheaterOptimizer,
     HdrData,
-    LampPowerModes
+    LampPowerModes,
+    LaserPowerModes
 )
 
 
@@ -535,6 +536,13 @@ class JVCProjector:
         """
         state, _ = self._do_reference_op("lamp_power", ACKs.picture_ack)
         return LampPowerModes(state.replace(ACKs.picture_ack.value, b"")).name
+
+    def get_laser_power(self) -> str:
+        """
+        Get the current laser power NZ only
+        """
+        state, _ = self._do_reference_op("laser_power", ACKs.picture_ack)
+        return LaserPowerModes(state.replace(ACKs.picture_ack.value, b"")).name
 
     def get_theater_optimizer_state(self) -> str:
         """
