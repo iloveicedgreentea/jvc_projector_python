@@ -26,7 +26,7 @@ from jvc_projector.commands import (
     TheaterOptimizer,
     HdrData,
     LampPowerModes,
-    LaserPowerModes
+    LaserPowerModes,
 )
 
 
@@ -156,10 +156,13 @@ class JVCProjector:
             "A2B1": "NX9",
             "A2B2": "NX7",
             "A2B3": "NX5",
+            "B2A1": "NX9",
+            "B2A2": "NX7",
+            "B2A3": "NX5",
             "B5B1": "NP5",
             "XHP1": "X5000",
             "XHP2": "XC6890",
-            "XHP3": "X7000||X9000"
+            "XHP3": "X7000||X9000",
         }
         model_res = self._replace_headers(res).decode()
         self.logger.debug(model_res)
