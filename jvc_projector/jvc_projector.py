@@ -256,10 +256,16 @@ class JVCProjector:
         ack: bytes,
         command_type: bytes = b"!",
     ) -> tuple[Union[str, bytes], bool]:
-        retry_count = 0
+
+        # ensure this doesnt run with dead client
         if self.client is None:
-            self.logger.debug("Forming connection")
+            self.logger.debug("Client is none. Reforming connection")
             self.reconnect()
+
+        # max retries
+        retry_count = 0
+        # use this to store error if retry counte exceeded
+        error = ""
 
         while retry_count < 5:
             self.logger.debug("do_command sending command: %s", command)
@@ -269,7 +275,6 @@ class JVCProjector:
             except ConnectionError as err:
                 # reaching this means the writer was closed somewhere
                 self.logger.error(err)
-                # self.logger.debug("Restarting connection")
                 # restart the connection
                 self.client.close()
                 self.reconnect()
@@ -290,21 +295,17 @@ class JVCProjector:
             try:
                 # most commands timeout when PJ is off
                 received_msg = self.client.recv(len(ack_value))
-            except socket.timeout:
-                self.logger.error(
-                    # TODO: this may be happening because something else read the response?
-                    "Connection timed out. Command %s may not be allowed to run at this time or something else is running already.",
-                    command,
-                )
-                self.logger.debug("restarting connection")
+            except socket.timeout as err:
+                error = f"Timed out. Command {command} may grayed out or cmd is running already."
+                self.logger.debug(err)
                 self.client.close()
                 self.reconnect()
                 retry_count += 1
-                return
+                continue
 
-            except ConnectionRefusedError:
-                self.logger.error("Connection Refused when getting msg")
-                self.logger.debug("restarting connection")
+            except ConnectionRefusedError as err:
+                error = "Connection Refused when getting msg"
+                self.logger.debug(err)
                 self.client.close()
                 self.reconnect()
                 retry_count += 1
@@ -312,40 +313,50 @@ class JVCProjector:
 
             self.logger.debug("received msg from PJ: %s", received_msg)
 
-            # This is unlikely to happen unless we read blank response
-            if received_msg == b"":
+            msg = self._check_received_msg(received_msg, ack_value, command_type)
+            if msg == b"":
                 self.logger.error("Got a blank msg. Restarting connection")
                 self.client.close()
                 self.reconnect()
                 retry_count += 1
                 continue
 
-            # get the ack for operation
-            if received_msg == ack_value and command_type == Header.operation.value:
-                return received_msg, True
-
-            # if we got what we expect and this is a reference,
-            # receive the data we requested
-            if received_msg == ack_value and command_type == Header.reference.value:
-                message = self.client.recv(1000)
-                self.logger.debug("received message from PJ: %s", message)
-
-                return message, True
-
-            # Because this now reuses a connection, reaching this stage means catastrophic failure, or HA running as usual :)
-            self.logger.error(
-                "Received ack did not match expected ack: %s != %s",
-                received_msg,
-                ack_value,
-            )
-            # Try to restart connection, if we got here somethihng is out of sync
-            self.client.close()
-            self.reconnect()
-            retry_count += 1
-            continue
+            # if all fine, return the value
+            return msg, True
 
         self.logger.error("retry count for running commands exceeded")
+        self.logger.error(error)
+
+        # TODO: fix return type, check for none in caller
         return "retry count exceeded", None
+
+    def _check_received_msg(
+        self, received_msg: bytes, ack_value: bytes, command_type: bytes
+    ) -> bytes:
+        # This is unlikely to happen unless we read blank response
+        if received_msg == b"":
+            return received_msg
+
+        # get the ack for operation
+        if received_msg == ack_value and command_type == Header.operation.value:
+            return received_msg, True
+
+        # if we got what we expect and this is a reference,
+        # receive the data we requested
+        if received_msg == ack_value and command_type == Header.reference.value:
+            message = self.client.recv(1000)
+            self.logger.debug("received message from PJ: %s", message)
+
+            return message, True
+
+        self.logger.error(
+            "Received ack: %s != expected ack: %s",
+            received_msg,
+            ack_value,
+        )
+
+        # return blank will force it to retry
+        return b""
 
     def _construct_command(
         self, raw_command: str, command_type: bytes
@@ -560,16 +571,12 @@ class JVCProjector:
 
         Returns str: values of PowerStates
         """
-        success = False
-
         cmd = (
             Header.reference.value
             + Header.pj_unit.value
             + Commands.power_status.value
             + Footer.close.value
         )
-        # try in case we get conn refused
-        # Try to prevent power state flapping
         msg, success = self._send_command(
             cmd,
             ack=ACKs.power_ack.value,
