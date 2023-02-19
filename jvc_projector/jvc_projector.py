@@ -339,7 +339,7 @@ class JVCProjector:
 
         # get the ack for operation
         if received_msg == ack_value and command_type == Header.operation.value:
-            return received_msg, True
+            return received_msg
 
         # if we got what we expect and this is a reference,
         # receive the data we requested
@@ -347,7 +347,7 @@ class JVCProjector:
             message = self.client.recv(1000)
             self.logger.debug("received message from PJ: %s", message)
 
-            return message, True
+            return message
 
         self.logger.error(
             "Received ack: %s != expected ack: %s",
