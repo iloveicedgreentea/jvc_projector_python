@@ -580,7 +580,7 @@ class JVCProjector:
         Returns str: values of PowerStates
         """
         # remove the headers
-        state, _ = self._do_reference_op("power_status", ACKs.power_ack)
+        state, _ = self._do_reference_op("power", ACKs.power_ack)
 
         return PowerStates(state.replace(ACKs.power_ack.value, b"")).name
 
