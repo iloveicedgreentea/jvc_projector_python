@@ -27,6 +27,7 @@ from jvc_projector.commands import (
     HdrData,
     LampPowerModes,
     LaserPowerModes,
+    AspectRatioModes
 )
 
 
@@ -565,31 +566,21 @@ class JVCProjector:
         state, _ = self._do_reference_op("theater_optimizer", ACKs.picture_ack)
         return TheaterOptimizer(state.replace(ACKs.picture_ack.value, b"")).name
 
+    def get_aspect_ratio(self) -> str:
+        """
+        Return aspect ratio
+        """
+        state, _ = self._do_reference_op("aspect_ratio", ACKs.hdmi_ack)
+        return AspectRatioModes(state.replace(ACKs.hdmi_ack.value, b"")).name
+
     def _get_power_state(self) -> str:
         """
         Return the current power state
 
         Returns str: values of PowerStates
         """
-        cmd = (
-            Header.reference.value
-            + Header.pj_unit.value
-            + Commands.power_status.value
-            + Footer.close.value
-        )
-        msg, success = self._send_command(
-            cmd,
-            ack=ACKs.power_ack.value,
-            command_type=Header.reference.value,
-        )
-
-        # Handle error with unexpected acks
-        if not success:
-            self.logger.error("Error getting power state: %s", msg)
-            return success
-
         # remove the headers
-        state = self._replace_headers(msg)
+        state, _ = self._do_reference_op("power_status", ACKs.power_ack)
 
         return PowerStates(state.replace(ACKs.power_ack.value, b"")).name
 

@@ -245,6 +245,11 @@ class HdrData(Enum):
     hdr10_plus = b"4"
     none = b"F"
 
+class AspectRatioModes(Enum):
+    zoom = b"2"
+    auto = b"3"
+    native = b"4"
+
 class Commands(Enum):
 
     # these use ! unless otherwise indicated
@@ -284,6 +289,9 @@ class Commands(Enum):
 
     # Color modes
     color_mode = b"ISHS", ColorSpaceModes, ACKs.hdmi_ack
+
+    # Aspect ratio
+    aspect_ratio = b"ISAS", AspectRatioModes, ACKs.hdmi_ack
 
     # input_level like 0-255
     input_level = b"ISIL", InputLevel, ACKs.hdmi_ack
