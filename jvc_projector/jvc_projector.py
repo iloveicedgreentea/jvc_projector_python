@@ -161,6 +161,8 @@ class JVCProjector:
             "B2A2": "NX7",
             "B2A3": "NX5",
             "B5B1": "NP5",
+            "XHR1": "X570R",
+            "XHR3": "X770R||X970R",
             "XHP1": "X5000",
             "XHP2": "XC6890",
             "XHP3": "X7000||X9000",
