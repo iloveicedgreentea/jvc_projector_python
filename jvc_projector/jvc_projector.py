@@ -328,7 +328,6 @@ class JVCProjector:
         self.logger.error("retry count for running commands exceeded")
         self.logger.error(error)
 
-        # TODO: fix return type, check for none in caller
         return "retry count exceeded", None
 
     def _check_received_msg(
