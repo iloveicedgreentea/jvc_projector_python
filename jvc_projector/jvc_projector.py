@@ -164,6 +164,9 @@ class JVCProjector:
             "XHP1": "X5000",
             "XHP2": "XC6890",
             "XHP3": "X7000||X9000",
+            "XHK1": "X500R",
+            "XHK2": "RS4910",
+            "XHK3": "X700R||X900R",
         }
         model_res = self._replace_headers(res).decode()
         self.logger.debug(model_res)
