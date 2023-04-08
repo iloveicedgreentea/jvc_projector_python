@@ -233,9 +233,11 @@ class TheaterOptimizer(Enum):
     off = b"0"
     on = b"1"
 
+
 class LampPowerModes(Enum):
     normal = b"0"
     high = b"1"
+
 
 class HdrData(Enum):
     sdr = b"0"
@@ -245,10 +247,12 @@ class HdrData(Enum):
     hdr10_plus = b"4"
     none = b"F"
 
+
 class AspectRatioModes(Enum):
     zoom = b"2"
     auto = b"3"
     native = b"4"
+
 
 class Commands(Enum):
 
@@ -306,7 +310,7 @@ class Commands(Enum):
     graphic_mode = b"PMGM", GraphicModeModes, ACKs.picture_ack
 
     # mask commands
-    mask = b"ISMA", MaskModes
+    mask = b"ISMA", MaskModes, ACKs.hdmi_ack
 
     # laser power commands
     laser_power = b"PMLP", LaserPowerModes, ACKs.picture_ack
