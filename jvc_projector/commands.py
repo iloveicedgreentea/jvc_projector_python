@@ -31,6 +31,7 @@ class ACKs(Enum):
     hdmi_ack = b"IS"
     hdr_ack = b"IF"
     model = b"MD"
+    source_ack = b"SC"
 
 
 class InputModes(Enum):
@@ -254,6 +255,12 @@ class AspectRatioModes(Enum):
     native = b"4"
 
 
+class SourceStatuses(Enum):
+    logo = b"\x00"
+    no_signal = b"0"
+    signal = b"1"
+
+
 class Commands(Enum):
 
     # these use ! unless otherwise indicated
@@ -333,3 +340,6 @@ class Commands(Enum):
 
     # e-shift
     eshift_mode = b"PMUS", EshiftModes, ACKs.picture_ack
+
+    # source status
+    source_status = b"SC", SourceStatuses, ACKs.source_ack
