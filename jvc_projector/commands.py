@@ -29,8 +29,9 @@ class ACKs(Enum):
     pj_req = b"PJREQ"
     install_acks = b"IN"
     hdmi_ack = b"IS"
-    hdr_ack = b"IF"
+    info_ack = b"IF"
     model = b"MD"
+    source_ack = b"SC"
 
 
 class InputModes(Enum):
@@ -254,6 +255,12 @@ class AspectRatioModes(Enum):
     native = b"4"
 
 
+class SourceStatuses(Enum):
+    logo = b"\x00"
+    no_signal = b"0"
+    signal = b"1"
+
+
 class Commands(Enum):
 
     # these use ! unless otherwise indicated
@@ -276,6 +283,9 @@ class Commands(Enum):
     # response -> \x40\x89\x01\x4D\x44(the model code)\x0A
     get_model = b"MD"
 
+    # software version
+    get_software_version = b"IFSV", str, ACKs.info_ack
+
     # content type
     content_type = b"PMAT", ContentTypes, ACKs.picture_ack
 
@@ -283,7 +293,7 @@ class Commands(Enum):
     hdr_processing = b"PMHP", HdrProcessing, ACKs.picture_ack
 
     # hdr data
-    hdr_data = b"IFHR", HdrData, ACKs.hdr_ack
+    hdr_data = b"IFHR", HdrData, ACKs.info_ack
 
     # theater optimizer on/off
     theater_optimizer = b"PMNM", TheaterOptimizer, ACKs.picture_ack
@@ -324,6 +334,9 @@ class Commands(Enum):
     # Lamp power
     lamp_power = b"PMLP", LampPowerModes, ACKs.picture_ack
 
+    # Lamp time
+    lamp_time = b"IFLT", int, ACKs.info_ack
+
     # Lens Aperture commands
     aperture = b"PMDI", ApertureModes, ACKs.picture_ack
 
@@ -333,3 +346,6 @@ class Commands(Enum):
 
     # e-shift
     eshift_mode = b"PMUS", EshiftModes, ACKs.picture_ack
+
+    # source status
+    source_status = b"SC", SourceStatuses, ACKs.source_ack

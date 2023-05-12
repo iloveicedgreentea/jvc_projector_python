@@ -23,6 +23,7 @@ from jvc_projector.commands import (
     LowLatencyModes,
     ContentTypes,
     HdrProcessing,
+    SourceStatuses,
     TheaterOptimizer,
     HdrData,
     LampPowerModes,
@@ -527,6 +528,13 @@ class JVCProjector:
         """
         state, _ = self._do_reference_op("input_level", ACKs.hdmi_ack)
         return InputLevel(state.replace(ACKs.hdmi_ack.value, b"")).name
+    
+    def get_software_version(self) -> str:
+        """
+        Get the current software version
+        """
+        state, _ = self._do_reference_op("get_software_version", ACKs.info_ack)
+        return state.replace(ACKs.info_ack.value, b"")
 
     def get_content_type(self) -> str:
         """
@@ -546,7 +554,7 @@ class JVCProjector:
         """
         Get the current hdr mode -> sdr, hdr10_plus, etc
         """
-        state, _ = self._do_reference_op("hdr_data", ACKs.hdr_ack)
+        state, _ = self._do_reference_op("hdr_data", ACKs.info_ack)
         return HdrData(state.replace(ACKs.hdr_ack.value, b"")).name
 
     def get_lamp_power(self) -> str:
@@ -555,6 +563,13 @@ class JVCProjector:
         """
         state, _ = self._do_reference_op("lamp_power", ACKs.picture_ack)
         return LampPowerModes(state.replace(ACKs.picture_ack.value, b"")).name
+
+    def get_lamp_time(self) -> int:
+        """
+        Get the current lamp time
+        """
+        state, _ = self._do_reference_op("lamp_time", ACKs.info_ack)
+        return int(state.replace(ACKs.info_ack.value, b""), 16)
 
     def get_laser_power(self) -> str:
         """
@@ -576,6 +591,13 @@ class JVCProjector:
         """
         state, _ = self._do_reference_op("aspect_ratio", ACKs.hdmi_ack)
         return AspectRatioModes(state.replace(ACKs.hdmi_ack.value, b"")).name
+
+    def get_source_status(self) -> str:
+        """
+        Return source status
+        """
+        state, _ = self._do_reference_op("source_status", ACKs.source_ack)
+        return SourceStatuses(state.replace(ACKs.source_ack.value, b"")).name
 
     def _get_power_state(self) -> str:
         """
