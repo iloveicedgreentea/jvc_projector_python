@@ -23,6 +23,7 @@ from jvc_projector.commands import (
     LowLatencyModes,
     ContentTypes,
     HdrProcessing,
+    SourceStatuses,
     TheaterOptimizer,
     HdrData,
     LampPowerModes,
@@ -576,6 +577,13 @@ class JVCProjector:
         """
         state, _ = self._do_reference_op("aspect_ratio", ACKs.hdmi_ack)
         return AspectRatioModes(state.replace(ACKs.hdmi_ack.value, b"")).name
+
+    def get_source_status(self) -> str:
+        """
+        Return source status
+        """
+        state, _ = self._do_reference_op("source_status", ACKs.source_ack)
+        return SourceStatuses(state.replace(ACKs.source_ack.value, b"")).name
 
     def _get_power_state(self) -> str:
         """
