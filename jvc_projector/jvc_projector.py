@@ -29,7 +29,8 @@ from jvc_projector.commands import (
     LampPowerModes,
     LaserPowerModes,
     AspectRatioModes,
-    MaskModes
+    MaskModes,
+    HdrLevel
 )
 
 
@@ -558,6 +559,13 @@ class JVCProjector:
         """
         state, _ = self._do_reference_op("hdr_processing", ACKs.picture_ack)
         return HdrProcessing(state.replace(ACKs.picture_ack.value, b"")).name
+    
+    def get_hdr_level(self) -> str:
+        """
+        Get the current hdr quantization level
+        """
+        state, _ = self._do_reference_op("hdr_level", ACKs.picture_ack)
+        return HdrLevel(state.replace(ACKs.picture_ack.value, b"")).name
 
     def get_hdr_data(self) -> str:
         """

@@ -248,6 +248,14 @@ class HdrData(Enum):
     hdr10_plus = b"4"
     none = b"F"
 
+class HdrLevel(Enum):
+    auto = b"0"
+    min2 = b"1"
+    min1 = b"2"
+    zero = b"3"
+    plus1 = b"4"
+    plus2 = b"5"
+
 
 class AspectRatioModes(Enum):
     zoom = b"2"
@@ -291,6 +299,7 @@ class Commands(Enum):
 
     # hdr processing (like frame by frame)
     hdr_processing = b"PMHP", HdrProcessing, ACKs.picture_ack
+    hdr_level = b"PMHL", HdrLevel, ACKs.picture_ack
 
     # hdr data
     hdr_data = b"IFHR", HdrData, ACKs.info_ack
