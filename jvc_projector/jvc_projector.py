@@ -28,7 +28,8 @@ from jvc_projector.commands import (
     HdrData,
     LampPowerModes,
     LaserPowerModes,
-    AspectRatioModes
+    AspectRatioModes,
+    MaskModes
 )
 
 
@@ -472,6 +473,7 @@ class JVCProjector:
 
         return msg, success
 
+    # its possible to write one generic func to do all of these but there is different support per model so its easier to just split it up
     def get_low_latency_state(self) -> str:
         """
         Get the current state of LL
@@ -500,6 +502,13 @@ class JVCProjector:
         """
         state, _ = self._do_reference_op("input_mode", ACKs.input_ack)
         return InputModes(state.replace(ACKs.input_ack.value, b"")).name
+    
+    def get_mask_mode(self) -> str:
+        """
+        Get the current mask mode
+        """
+        state, _ = self._do_reference_op("mask", ACKs.hdmi_ack)
+        return MaskModes(state.replace(ACKs.hdmi_ack.value, b"")).name
 
     def get_laser_mode(self) -> str:
         """
@@ -555,7 +564,7 @@ class JVCProjector:
         Get the current hdr mode -> sdr, hdr10_plus, etc
         """
         state, _ = self._do_reference_op("hdr_data", ACKs.info_ack)
-        return HdrData(state.replace(ACKs.hdr_ack.value, b"")).name
+        return HdrData(state.replace(ACKs.info_ack.value, b"")).name
 
     def get_lamp_power(self) -> str:
         """
