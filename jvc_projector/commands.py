@@ -217,6 +217,14 @@ class EshiftModes(Enum):
 
 class ContentTypes(Enum):
     # Auto Transition Values
+    auto = b"0"
+    sdr = b"1"
+    hdr10_plus = b"2"
+    hdr10 = b"3"
+    hlg = b"4"
+
+class ContentTypeTrans(Enum):
+    # Auto Transition Values
     sdr = b"1"
     hdr10_plus = b"2"
     hdr10 = b"3"
@@ -295,7 +303,8 @@ class Commands(Enum):
     get_software_version = b"IFSV", str, ACKs.info_ack
 
     # content type
-    content_type = b"PMAT", ContentTypes, ACKs.picture_ack
+    content_type = b"PMCT", ContentTypes, ACKs.picture_ack
+    content_type_trans = b"PMAT", ContentTypeTrans, ACKs.picture_ack
 
     # hdr processing (like frame by frame)
     hdr_processing = b"PMHP", HdrProcessing, ACKs.picture_ack

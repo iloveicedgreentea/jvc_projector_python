@@ -30,7 +30,8 @@ from jvc_projector.commands import (
     LaserPowerModes,
     AspectRatioModes,
     MaskModes,
-    HdrLevel
+    HdrLevel,
+    ContentTypeTrans,
 )
 
 
@@ -44,7 +45,7 @@ class JVCProjector:
         # Can supply a logger object. It can hook into the HA logger
         logger: logging.Logger = logging.getLogger(__name__),
         port: int = 20554,
-        connect_timeout: int = 5,
+        connect_timeout: int = 3,
     ):
         self.host = host
         self.port = port
@@ -57,7 +58,6 @@ class JVCProjector:
         self.PJ_ACK: Final = ACKs.pj_ack.value
         self.PJ_REQ: Final = ACKs.pj_req.value
         self.client = None
-        self.command_read_timeout = 3
         # NZ or NX (NP5 is classified as NX)
         self.model_family = ""
 
@@ -273,10 +273,11 @@ class JVCProjector:
 
         # max retries
         retry_count = 0
-        # use this to store error if retry counte exceeded
+        # use this to store error if retry count exceeded
         error = ""
 
-        while retry_count < 5:
+        # retry once in case connection is dead
+        while retry_count < 2:
             self.logger.debug("do_command sending command: %s", command)
             # send the command
             try:
@@ -336,7 +337,7 @@ class JVCProjector:
         self.logger.error("retry count for running commands exceeded")
         self.logger.error(error)
 
-        return "retry count exceeded", None
+        raise TimeoutError(error)
 
     def _check_received_msg(
         self, received_msg: bytes, ack_value: bytes, command_type: bytes
@@ -503,7 +504,7 @@ class JVCProjector:
         """
         state, _ = self._do_reference_op("input_mode", ACKs.input_ack)
         return InputModes(state.replace(ACKs.input_ack.value, b"")).name
-    
+
     def get_mask_mode(self) -> str:
         """
         Get the current mask mode
@@ -538,7 +539,7 @@ class JVCProjector:
         """
         state, _ = self._do_reference_op("input_level", ACKs.hdmi_ack)
         return InputLevel(state.replace(ACKs.hdmi_ack.value, b"")).name
-    
+
     def get_software_version(self) -> str:
         """
         Get the current software version
@@ -553,13 +554,20 @@ class JVCProjector:
         state, _ = self._do_reference_op("content_type", ACKs.picture_ack)
         return ContentTypes(state.replace(ACKs.picture_ack.value, b"")).name
 
+    def get_content_type_trans(self) -> str:
+        """
+        Get the current auto content transition type
+        """
+        state, _ = self._do_reference_op("content_type_trans", ACKs.picture_ack)
+        return ContentTypeTrans(state.replace(ACKs.picture_ack.value, b"")).name
+
     def get_hdr_processing(self) -> str:
         """
         Get the current hdr processing setting like frame by frame. Will fail if not in HDR mode!
         """
         state, _ = self._do_reference_op("hdr_processing", ACKs.picture_ack)
         return HdrProcessing(state.replace(ACKs.picture_ack.value, b"")).name
-    
+
     def get_hdr_level(self) -> str:
         """
         Get the current hdr quantization level
