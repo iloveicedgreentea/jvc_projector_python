@@ -118,7 +118,7 @@ cp .env.template .env
 `$command,$parameter`
 example: "anamorphic,off"
 example: "anamorphic,d"
-example: "laser_dim,auto3"
+example: "laser_mode,auto3"
 
 It also supports using remote codes as ASCII [found here](https://support.jvc.com/consumer/support/documents/DILAremoteControlGuide.pdf) (Code A only)
 
@@ -128,12 +128,24 @@ It also supports using remote codes as ASCII [found here](https://support.jvc.co
 Currently Supported Commands:
         anamorphic
         aperture
+        aspect_ratio
+        color_mode
+        content_type
+        content_type_trans
         enhance
-        eshift
+        eshift_mode
+        get_model
+        get_software_version
         graphic_mode
-        input
+        hdr_data
+        hdr_level
+        hdr_processing
+        input_level
+        input_mode
         installation_mode
-        laser_dim
+        lamp_power
+        lamp_time
+        laser_mode
         laser_power
         low_latency
         mask
@@ -141,24 +153,43 @@ Currently Supported Commands:
         motion_enhance
         picture_mode
         power
+        remote
+        source_status
+        theater_optimizer
 
 
 Currently Supported Parameters:
-anamorphic:
+AnamorphicModes
         off
         a
         b
         c
         d
-aperture:
+ApertureModes
         off
         auto1
         auto2
-aspect_ratio:
+AspectRatioModes
         zoom
         auto
         native
-enhance:
+ColorSpaceModes
+        auto
+        YCbCr444
+        YCbCr422
+        RGB
+ContentTypeTrans
+        sdr
+        hdr10_plus
+        hdr10
+        hlg
+ContentTypes
+        auto
+        sdr
+        hdr10_plus
+        hdr10
+        hlg
+EnhanceModes
         zero
         one
         two
@@ -170,17 +201,41 @@ enhance:
         eight
         nine
         ten
-eshift:
+EshiftModes
         off
         on
-graphic_mode:
+GraphicModeModes
         standard
         hires1
         hires2
-input:
+HdrData
+        sdr
+        hdr
+        smpte
+        hybridlog
+        hdr10_plus
+        none
+HdrLevel
+        auto
+        min2
+        min1
+        zero
+        plus1
+        plus2
+HdrProcessing
+        hdr10_plus
+        static
+        frame_by_frame
+        scene_by_scene
+InputLevel
+        standard
+        enhanced
+        superwhite
+        auto
+InputModes
         hdmi1
         hdmi2
-installation_mode:
+InstallationModes
         mode1
         mode2
         mode3
@@ -191,22 +246,25 @@ installation_mode:
         mode8
         mode9
         mode10
-laser_dim:
+LampPowerModes
+        normal
+        high
+LaserModes
         off
         auto1
         auto2
         auto3
-laser_power:
+LaserPowerModes
         low
         med
         high
-low_latency:
+LowLatencyModes
         off
         on
-mask:
+MaskModes
         on
         off
-menu:
+MenuModes
         menu
         up
         down
@@ -214,20 +272,17 @@ menu:
         left
         right
         ok
-motion_enhance:
+MotionEnhanceModes
         off
         low
         high
-picture_mode:
+PictureModes
         film
         cinema
         natural
         hdr
-        THX
+        thx
         frame_adapt_hdr
-        frame_adapt_hdr2
-        frame_adapt_hdr3
-        filmmaker
         user1
         user2
         user3
@@ -237,7 +292,23 @@ picture_mode:
         hlg
         hdr_plus
         pana_pq
-power:
+        filmmaker
+        frame_adapt_hdr2
+        frame_adapt_hdr3
+PowerModes
+        off
+        on
+PowerStates
+        standby
+        on
+        cooling
+        reserved
+        emergency
+SourceStatuses
+        logo
+        no_signal
+        signal
+TheaterOptimizer
         off
         on
 ```
