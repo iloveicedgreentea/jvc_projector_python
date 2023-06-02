@@ -294,6 +294,7 @@ class Commands(Enum):
     power_status = b"PW"
     current_output = b"IP"
     info = b"RC7374"
+    remote = b"RC73"
 
     # Checking for model code
     # response -> \x40\x89\x01\x4D\x44(the model code)\x0A

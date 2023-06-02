@@ -120,6 +120,10 @@ example: "anamorphic,off"
 example: "anamorphic,d"
 example: "laser_dim,auto3"
 
+It also supports using remote codes as ASCII [found here](https://support.jvc.com/consumer/support/documents/DILAremoteControlGuide.pdf) (Code A only)
+
+`jvc.emulate_remote("23")`
+
 ```
 Currently Supported Commands:
         anamorphic

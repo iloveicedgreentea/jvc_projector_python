@@ -203,7 +203,7 @@ class JVCProjector:
 
     def _send_command(
         self,
-        send_command: Union[list[bytes], bytes],
+        send_command: Union[list[str], str],
         command_type: bytes = b"!",
         ack: bytes = None,
     ) -> tuple[str, bool]:
@@ -228,22 +228,21 @@ class JVCProjector:
         self.logger.debug("Send command: %s", send_command)
         self.logger.debug("Send ack: %s", ack)
         if command_type == Header.reference.value:
-            result, success = self._do_command(send_command, ack, command_type)
-
-            return result, success
+            return self._do_command(send_command, ack, command_type)
 
         if isinstance(send_command, list):
+            # check emulate remote first
+            if send_command[0] == "remote":
+                return self.emulate_remote(send_command[1])
             for cmd in send_command:
                 cons_command, ack = self._construct_command(cmd, command_type)
                 if not ack:
                     return cons_command, ack
                 # need a delay otherwise it kills connection
                 time.sleep(0.1)
-                result, success = self._do_command(
-                    cons_command, ack.value, command_type
-                )
-                if not success:
-                    return result, success
+                return self._do_command(cons_command, ack.value, command_type)
+
+        # legacy since HA seems to always use a list
         else:
             try:
                 cons_command, ack = self._construct_command(send_command, command_type)
@@ -252,12 +251,7 @@ class JVCProjector:
 
             if not ack:
                 return cons_command, ack
-            result, success = self._do_command(cons_command, ack.value, command_type)
-            if not success:
-                return result, success
-
-        self.logger.debug("send command result: %s", result)
-        return "ok", True
+            return self._do_command(cons_command, ack.value, command_type)
 
     def _do_command(
         self,
@@ -428,6 +422,25 @@ class JVCProjector:
 
         return self._send_command(
             cmd,
+            ack=ACKs.menu_ack,
+            command_type=Header.operation.value,
+        )
+
+    def emulate_remote(self, remote_code: str) -> tuple[str, bool]:
+        """
+        Send a cmd via remote emulation
+
+        remote_code: str- ASCII of the remote code like 23 or D4 https://support.jvc.com/consumer/support/documents/DILAremoteControlGuide.pdf
+        """
+        cmd = (
+            Header.operation.value
+            + Header.pj_unit.value
+            + Commands.remote.value
+            + Footer.close.value
+        )
+
+        return self._send_command(
+            cmd + remote_code,
             ack=ACKs.menu_ack,
             command_type=Header.operation.value,
         )
