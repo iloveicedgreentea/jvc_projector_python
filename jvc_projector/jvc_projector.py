@@ -233,7 +233,12 @@ class JVCProjector:
         if isinstance(send_command, list):
             # check emulate remote first
             if "remote" in send_command[0]:
-                return self.emulate_remote(send_command[1])
+                try:
+                    _, value = send_command[0].split(",")
+                    return self.emulate_remote(value)
+                except ValueError:
+                    return f"No value for command provided {send_command}", False
+                
             for cmd in send_command:
                 cons_command, ack = self._construct_command(cmd, command_type)
                 if not ack:
