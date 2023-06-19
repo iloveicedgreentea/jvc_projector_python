@@ -149,6 +149,7 @@ class MenuModes(Enum):
     """
 
     menu = b"2E"
+    lens_control = b"30"
     up = b"01"
     down = b"02"
     back = b"03"
@@ -294,6 +295,7 @@ class Commands(Enum):
     power_status = b"PW"
     current_output = b"IP"
     info = b"RC7374"
+    remote = b"RC73"
 
     # Checking for model code
     # response -> \x40\x89\x01\x4D\x44(the model code)\x0A
