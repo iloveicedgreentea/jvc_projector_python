@@ -149,6 +149,7 @@ class MenuModes(Enum):
     """
 
     menu = b"2E"
+    lens_control = b"30"
     up = b"01"
     down = b"02"
     back = b"03"

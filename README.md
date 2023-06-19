@@ -266,6 +266,7 @@ MaskModes
         off
 MenuModes
         menu
+        lens_control
         up
         down
         back
