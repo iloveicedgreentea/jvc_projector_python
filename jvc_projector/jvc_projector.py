@@ -447,7 +447,7 @@ class JVCProjector:
         )
 
         return self._send_command(
-            cmd + remote_code,
+            cmd + remote_code.encode(),
             ack=ACKs.menu_ack,
             command_type=Header.operation.value,
         )
