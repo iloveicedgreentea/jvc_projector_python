@@ -225,14 +225,14 @@ class JVCProjector:
         """
         # Check commands
         self.logger.debug("Command_type: %s", command_type)
-        self.logger.debug("Send command: %s", send_command)
+        self.logger.debug("Send command: %s is of type %s", send_command, type(send_command))
         self.logger.debug("Send ack: %s", ack)
         if command_type == Header.reference.value:
             return self._do_command(send_command, ack, command_type)
 
         if isinstance(send_command, list):
             # check emulate remote first
-            if send_command[0] == "remote":
+            if "remote" in send_command[0]:
                 return self.emulate_remote(send_command[1])
             for cmd in send_command:
                 cons_command, ack = self._construct_command(cmd, command_type)
@@ -242,8 +242,10 @@ class JVCProjector:
                 time.sleep(0.1)
                 return self._do_command(cons_command, ack.value, command_type)
 
-        # legacy since HA seems to always use a list
         else:
+            str_cmd = send_command.split(",")
+            if "remote" in str_cmd[0]:
+                return self.emulate_remote(str_cmd[1])
             try:
                 cons_command, ack = self._construct_command(send_command, command_type)
             except TypeError:
