@@ -442,11 +442,12 @@ class JVCProjector:
             Header.operation.value
             + Header.pj_unit.value
             + Commands.remote.value
+            + remote_code.encode()
             + Footer.close.value
         )
 
         return self._send_command(
-            cmd + remote_code.encode(),
+            cmd,
             ack=ACKs.menu_ack,
             command_type=Header.operation.value,
         )
