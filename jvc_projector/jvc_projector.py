@@ -225,7 +225,9 @@ class JVCProjector:
         """
         # Check commands
         self.logger.debug("Command_type: %s", command_type)
-        self.logger.debug("Send command: %s is of type %s", send_command, type(send_command))
+        self.logger.debug(
+            "Send command: %s is of type %s", send_command, type(send_command)
+        )
         self.logger.debug("Send ack: %s", ack)
         if command_type == Header.reference.value:
             return self._do_command(send_command, ack, command_type)
@@ -238,7 +240,7 @@ class JVCProjector:
                     return self.emulate_remote(value)
                 except ValueError:
                     return f"No value for command provided {send_command}", False
-                
+
             for cmd in send_command:
                 cons_command, ack = self._construct_command(cmd, command_type)
                 if not ack:
@@ -248,9 +250,6 @@ class JVCProjector:
                 return self._do_command(cons_command, ack.value, command_type)
 
         else:
-            str_cmd = send_command.split(",")
-            if "remote" in str_cmd[0]:
-                return self.emulate_remote(str_cmd[1])
             try:
                 cons_command, ack = self._construct_command(send_command, command_type)
             except TypeError:
