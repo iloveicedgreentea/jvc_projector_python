@@ -87,6 +87,14 @@ class PictureModes(Enum):
     frame_adapt_hdr2 = b"18"  # requires firmware 2.0
     frame_adapt_hdr3 = b"19"  # requires firmware 2.0
 
+class PictureModes3D(Enum):
+    natural = b"1"
+    user1 = b"2"
+    user2 = b"3"
+    user3 = b"4"
+    cinema = b"8"
+    film = b"9"
+    last = b"F"
 
 class InstallationModes(Enum):
     mode1 = b"0"
@@ -165,7 +173,7 @@ class LaserDimModes(Enum):
     auto3 = b"3"  # requires firmware 2.0
 
 
-class EnhanceModes(Enum):
+class Numeric(Enum):
     """
     JVC numeric values are the byte values of two complemented hex
     """
@@ -277,6 +285,11 @@ class SourceStatuses(Enum):
     no_signal = b"0"
     signal = b"1"
 
+class ThreeD(Enum):
+    twoD = b"0"
+    auto = b"1"
+    sbs = b"3"
+    tb = b"4"
 
 class Commands(Enum):
 
@@ -333,7 +346,7 @@ class Commands(Enum):
     # low latency enable/disable
     low_latency = b"PMLL", LowLatencyModes, ACKs.picture_ack
     # enhance
-    enhance = b"PMEN", EnhanceModes, ACKs.picture_ack
+    enhance = b"PMEN", Numeric, ACKs.picture_ack
     # motion enhance
     motion_enhance = b"PMME", MotionEnhanceModes, ACKs.picture_ack
     # graphic mode
@@ -369,3 +382,16 @@ class Commands(Enum):
 
     # source status
     source_status = b"SC", SourceStatuses, ACKs.source_ack
+
+    # 3d
+    signal_3d = b"IS3D", ThreeD, ACKs.hdmi_ack
+    # hdmi phase alignment
+    signal_3d_phase = b"IS3P", Numeric, ACKs.hdmi_ack
+    # 3d parallax (-8 to 8)
+    signal_3d_parallax = b"ISLV", Numeric, ACKs.hdmi_ack
+    # 3d crosstalk cancel (-8 to 8)
+    signal_3d_crosstalk = b"ISCA", Numeric, ACKs.hdmi_ack
+    # 3d pm
+    signal_3d_pm = b"ISS3", PictureModes3D, ACKs.hdmi_ack
+    # 2d signal
+    signal_2d_pm = b"ISS2", PictureModes3D, ACKs.hdmi_ack
