@@ -2,7 +2,28 @@
 All the enums for commands
 """
 from enum import Enum
+from typing import Final
 
+model_map = {
+    "B5A1": "NZ9",
+    "B5A2": "NZ8",
+    "B5A3": "NZ7",
+    "A2B1": "NX9",
+    "A2B2": "NX7",
+    "A2B3": "NX5",
+    "B2A1": "NX9",
+    "B2A2": "NX7",
+    "B2A3": "NX5",
+    "B5B1": "NP5",
+    "XHR1": "X570R",
+    "XHR3": "X770R||X970R",
+    "XHP1": "X5000",
+    "XHP2": "XC6890",
+    "XHP3": "X7000||X9000",
+    "XHK1": "X500R",
+    "XHK2": "RS4910",
+    "XHK3": "X700R||X900R",
+}
 
 # pylint: disable=missing-class-docstring invalid-name
 class Header(Enum):
@@ -32,6 +53,10 @@ class ACKs(Enum):
     info_ack = b"IF"
     model = b"MD"
     source_ack = b"SC"
+
+PJ_OK: Final = ACKs.greeting.value
+PJ_ACK: Final = ACKs.pj_ack.value
+PJ_REQ: Final = ACKs.pj_req.value
 
 
 class InputModes(Enum):
