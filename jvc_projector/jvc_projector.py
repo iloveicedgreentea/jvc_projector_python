@@ -2,6 +2,7 @@
 Implements the JVC protocol
 """
 import asyncio
+from typing import Union
 import logging
 from dataclasses import dataclass
 
@@ -43,6 +44,7 @@ class JVCProjectorCoordinator:
         self.reader: asyncio.StreamReader = None
         self.writer: asyncio.StreamWriter = None
         self.model_family = ""
+        
 
     async def _handshake(self) -> bool:
         """Perform an async 3-way handshake with the projector"""
@@ -119,6 +121,24 @@ class JVCProjectorCoordinator:
                 self.logger.debug(err)
                 await asyncio.sleep(2)
 
+    def exec_command(
+         self, command: Union[list[str], str], command_type: bytes = b"!"
+     ) -> tuple[str, bool]:
+         """
+         Wrapper for commander.send_command() externally
+         command: a str of the command and value, separated by a comma ("power,on").
+             or a list of commands
+         This is to make home assistant UI use easier
+         command_type: which operation, like ! or ? (default = !)
+         Returns
+             (
+                 ack or error message: str,
+                 success flag: bool
+             )
+         """
+         self.logger.debug("exec_command Executing command: %s - %s", command, command_type)
+         return self.commander.send_command(command, command_type)
+    
     async def close_connection(self):
         """Close the projector connection asynchronously"""
         self.writer.close()
@@ -150,13 +170,13 @@ class JVCProjectorCoordinator:
         """
         Turns on PJ
         """
-        return await self.commander.send_command("power,on")
+        return await self.exec_command("power,on")
 
     async def power_off(self) -> tuple[str, bool]:
         """
         Turns off PJ
         """
-        return await self.commander.send_command("power,off")
+        return await self.exec_command("power,off")
 
     async def _get_attribute(self, command: str, ack: Enum, state_enum: Enum) -> str:
         """
