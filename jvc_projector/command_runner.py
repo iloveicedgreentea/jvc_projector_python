@@ -1,42 +1,14 @@
-from jvc_projector.jvc_projector import JVCInput
 import asyncio
 import logging
-from typing import Union
 import socket
 import time
-from jvc_projector.commands import (
-    InputLevel,
-    ColorSpaceModes,
-    EshiftModes,
-    ACKs,
-    Footer,
-    Header,
-    Commands,
-    PowerStates,
-    PictureModes,
-    InstallationModes,
-    InputModes,
-    LaserDimModes,
-    Enum,
-    LowLatencyModes,
-    ContentTypes,
-    HdrProcessing,
-    SourceStatuses,
-    TheaterOptimizer,
-    HdrData,
-    LampPowerModes,
-    LaserPowerModes,
-    AspectRatioModes,
-    MaskModes,
-    HdrLevel,
-    ContentTypeTrans,
-)
-from jvc_projector.error_classes import (
-    ConnectionClosedError,
-    CommandTimeoutError,
-    CommandRetryExceededError,
-    BlankMessageError
-)
+from typing import Union
+
+from jvc_projector.commands import ACKs, Commands, Footer, Header
+from jvc_projector.error_classes import (BlankMessageError,
+                                         CommandTimeoutError,
+                                         ConnectionClosedError)
+from jvc_projector.jvc_projector import JVCInput
 
 
 class JVCCommander:
@@ -127,7 +99,7 @@ class JVCCommander:
                 return await self._do_command(cons_command, ack.value, command_type)
             return "No command provided", False
         except (ConnectionClosedError, CommandTimeoutError, BlankMessageError, ConnectionRefusedError) as err:
-                return str(err), False
+            return str(err), False
 
     async def emulate_remote(self, remote_code: str) -> tuple[str, bool]:
         """

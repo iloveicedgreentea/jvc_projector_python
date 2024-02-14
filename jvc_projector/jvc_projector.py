@@ -2,41 +2,22 @@
 Implements the JVC protocol
 """
 import asyncio
-from dataclasses import dataclass
 import logging
-from typing import Union
+from dataclasses import dataclass
+
 from jvc_projector.command_runner import JVCCommander
-from jvc_projector.commands import (
-    InputLevel,
-    ColorSpaceModes,
-    EshiftModes,
-    ACKs,
-    Footer,
-    Header,
-    Commands,
-    PowerStates,
-    PictureModes,
-    InstallationModes,
-    InputModes,
-    LaserDimModes,
-    Enum,
-    LowLatencyModes,
-    ContentTypes,
-    HdrProcessing,
-    SourceStatuses,
-    TheaterOptimizer,
-    HdrData,
-    LampPowerModes,
-    LaserPowerModes,
-    AspectRatioModes,
-    MaskModes,
-    HdrLevel,
-    ContentTypeTrans,
-    PJ_ACK,
-    PJ_OK,
-    PJ_REQ,
-    model_map
-)
+from jvc_projector.commands import (PJ_ACK, PJ_OK, PJ_REQ, ACKs,
+                                    AspectRatioModes, ColorSpaceModes,
+                                    Commands, ContentTypes, ContentTypeTrans,
+                                    Enum, EshiftModes, Footer, HdrData,
+                                    HdrLevel, HdrProcessing, Header,
+                                    InputLevel, InputModes, InstallationModes,
+                                    LampPowerModes, LaserDimModes,
+                                    LaserPowerModes, LowLatencyModes,
+                                    MaskModes, PictureModes, PowerStates,
+                                    SourceStatuses, TheaterOptimizer,
+                                    model_map)
+
 
 @dataclass
 class JVCInput:
@@ -176,14 +157,14 @@ class JVCProjectorCoordinator:
         Turns off PJ
         """
         return await self.commander.send_command("power,off")
-    
+
     async def _get_attribute(self, command: str, ack: Enum, state_enum: Enum) -> str:
         """
         Generic function to get the current attribute asynchronously
         """
         state, _ = await self.commander.do_reference_op(command, ack.value)
         return state_enum(state.replace(ack.value, b"")).name
-    
+
     async def get_low_latency_state(self) -> str:
         """
         Get the current state of LL
@@ -311,8 +292,7 @@ class JVCProjectorCoordinator:
         Return source status
         """
         return await self._get_attribute("source_status", ACKs.source_ack, SourceStatuses)
-    
-    
+
     async def _get_power_state(self) -> str:
         """
         Return the current power state
@@ -353,8 +333,9 @@ class JVCProjectorCoordinator:
         print("\n")
         # Print all options
         print("Currently Supported Parameters:")
-        from jvc_projector import commands
         import inspect
+
+        from jvc_projector import commands
 
         for name, obj in inspect.getmembers(commands):
             if inspect.isclass(obj) and obj not in [
