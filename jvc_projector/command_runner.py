@@ -1,4 +1,5 @@
 from jvc_projector.jvc_projector import JVCInput
+import asyncio
 import logging
 from typing import Union
 import socket
@@ -45,7 +46,7 @@ class JVCCommander:
     Handles sending commands to the projector
     """
 
-    def __init__(self, options: JVCInput, logger: logging.Logger = logging.getLogger(__name__), client: socket.socket = None) -> None:
+    def __init__(self, options: JVCInput, logger: logging.Logger = logging.getLogger(__name__), reader: asyncio.StreamReader = None, writer: asyncio.StreamWriter = None) -> None:
         self.host = options.host
         self.port = options.port
         # NZ models have password authentication
@@ -53,7 +54,8 @@ class JVCCommander:
         self.connect_timeout: int = options.connect_timeout
         self.logger = logger
 
-        self.client = client
+        self.reader = reader
+        self.writer = writer
 
     def replace_headers(self, item: bytes) -> bytes:
         """
@@ -64,7 +66,8 @@ class JVCCommander:
             item = item.replace(header, b"")
 
         return item
-    def send_command(
+
+    async def send_command(
         self,
         send_command: Union[list[str], str],
         command_type: bytes = b"!",
@@ -92,36 +95,41 @@ class JVCCommander:
             "Send command: %s is of type %s", send_command, type(send_command)
         )
         self.logger.debug("Send ack: %s", ack)
-        if command_type == Header.reference.value:
-            return self._do_command(send_command, ack, command_type)
+        try:
+            if command_type == Header.reference.value:
+                return await self._do_command(send_command, ack, command_type)
 
-        if isinstance(send_command, list):
-            # check emulate remote first
-            if "remote" in send_command[0]:
+            # HA sends commands as a list
+            if isinstance(send_command, list):
+                # check emulate remote first
+                if "remote" in send_command[0]:
+                    try:
+                        _, value = send_command[0].split(",")
+                        return await self.emulate_remote(value)
+                    except ValueError:
+                        return f"No value for command provided {send_command}", False
+
+                for cmd in send_command:
+                    cons_command, ack = self._construct_command(cmd, command_type)
+                    if not ack:
+                        return cons_command, ack
+                    # need a delay otherwise it kills connection
+                    time.sleep(0.1)
+                    return await self._do_command(cons_command, ack.value, command_type)
+            else:
                 try:
-                    _, value = send_command[0].split(",")
-                    return self.emulate_remote(value)
-                except ValueError:
-                    return f"No value for command provided {send_command}", False
+                    cons_command, ack = self._construct_command(send_command, command_type)
+                except TypeError:
+                    cons_command = send_command
 
-            for cmd in send_command:
-                cons_command, ack = self._construct_command(cmd, command_type)
                 if not ack:
                     return cons_command, ack
-                # need a delay otherwise it kills connection
-                time.sleep(0.1)
-                return self._do_command(cons_command, ack.value, command_type)
+                return await self._do_command(cons_command, ack.value, command_type)
+            return "No command provided", False
+        except (ConnectionClosedError, CommandTimeoutError, BlankMessageError, ConnectionRefusedError) as err:
+                return str(err), False
 
-        else:
-            try:
-                cons_command, ack = self._construct_command(send_command, command_type)
-            except TypeError:
-                cons_command = send_command
-
-            if not ack:
-                return cons_command, ack
-            return self._do_command(cons_command, ack.value, command_type)
-    def emulate_remote(self, remote_code: str) -> tuple[str, bool]:
+    async def emulate_remote(self, remote_code: str) -> tuple[str, bool]:
         """
         Send a cmd via remote emulation
 
@@ -135,13 +143,13 @@ class JVCCommander:
             + Footer.close.value
         )
 
-        return self.send_command(
+        return await self.send_command(
             cmd,
             ack=ACKs.menu_ack,
             command_type=Header.operation.value,
         )
 
-    def _do_command(
+    async def _do_command(
         self,
         command: bytes,
         ack: bytes,
@@ -149,73 +157,51 @@ class JVCCommander:
     ) -> tuple[Union[str, bytes], bool]:
 
         # ensure this doesnt run with dead client
-        if self.client is None:
-            self.logger.warning("Client is none. Reforming connection")
-            # TODO: have coordinator reconnect if raise
-            raise ConnectionClosedError("Client is none")
+        if self.writer is None:
+            self.logger.warning("Writer is closed")
+            raise ConnectionClosedError("writer is none")
 
-        # max retries
-        retry_count = 0
-        # use this to store error if retry count exceeded
-        error = ""
+        self.logger.debug("do_command sending command: %s", command)
+        # send the command
+        try:
+            await self.writer.write(command)
+        except ConnectionError as err:
+            # reaching this means the writer was closed somewhere
+            self.logger.error(err)
+            raise ConnectionClosedError(err) from err
 
-        # retry once in case connection is dead
-        # TODO: move retry to coordinator
-        while retry_count < 2:
-            self.logger.debug("do_command sending command: %s", command)
-            # send the command
-            try:
-                self.client.sendall(command)
-            except ConnectionError as err:
-                # reaching this means the writer was closed somewhere
-                self.logger.error(err)
-                # restart the connection
-                self.client.close()
-                # TODO: have coordinator reconnect
-                raise ConnectionClosedError(err) from err
+        # if we send a command that returns info, the projector will send
+        # an ack, followed by the actual message. Check to see if the ack sent by
+        # projector is correct, then return the message.
+        ack_value = (
+            Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
+        )
+        self.logger.debug("constructed ack_value: %s", ack_value)
 
-            # if we send a command that returns info, the projector will send
-            # an ack, followed by the actual message. Check to see if the ack sent by
-            # projector is correct, then return the message.
-            ack_value = (
-                Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
-            )
-            self.logger.debug("constructed ack_value: %s", ack_value)
+        # Receive the acknowledgement from PJ
+        try:
+            # most commands timeout when PJ is off
+            received_msg = await self.reader.read(len(ack_value))
+        except socket.timeout as err:
+            error = f"Timed out. Command {command} may grayed out or cmd is running already."
+            self.logger.debug(err)
+            raise CommandTimeoutError(error) from err
 
-            # Receive the acknowledgement from PJ
-            try:
-                # most commands timeout when PJ is off
-                received_msg = self.client.recv(len(ack_value))
-            except socket.timeout as err:
-                error = f"Timed out. Command {command} may grayed out or cmd is running already."
-                self.logger.debug(err)
-                self.client.close()
-                # TODO: have coordinator reconnect
-                raise CommandTimeoutError(error) from err
+        except ConnectionRefusedError as err:
+            self.logger.debug(err)
+            raise ConnectionRefusedError(error) from err
 
-            except ConnectionRefusedError as err:
-                self.logger.debug(err)
-                self.client.close()
-                # TODO: have coordinator reconnect
-                raise ConnectionRefusedError(error) from err
+        self.logger.debug("received msg from PJ: %s", received_msg)
 
-            self.logger.debug("received msg from PJ: %s", received_msg)
+        msg = await self._check_received_msg(received_msg, ack_value, command_type)
+        if msg == b"":
+            self.logger.error("Got a blank msg. Restarting connection")
+            raise BlankMessageError("Got a blank msg")
 
-            msg = self._check_received_msg(received_msg, ack_value, command_type)
-            if msg == b"":
-                self.logger.error("Got a blank msg. Restarting connection")
-                self.client.close()
-                # TODO: have coordinator reconnect
-                raise BlankMessageError("Got a blank msg")
+        # if all fine, return the value
+        return msg, True
 
-            # if all fine, return the value
-            return msg, True
-
-        self.logger.error("retry count for running commands exceeded")
-
-        raise CommandRetryExceededError("retry count for running commands exceeded")
-
-    def _check_received_msg(
+    async def _check_received_msg(
         self, received_msg: bytes, ack_value: bytes, command_type: bytes
     ) -> bytes:
         # This is unlikely to happen unless we read blank response
@@ -229,7 +215,7 @@ class JVCCommander:
         # if we got what we expect and this is a reference,
         # receive the data we requested
         if received_msg == ack_value and command_type == Header.reference.value:
-            message = self.client.recv(1000)
+            message = await self.reader.read()
             self.logger.debug("received message from PJ: %s", message)
 
             return message
@@ -271,7 +257,8 @@ class JVCCommander:
 
         return command, ack
 
-    def do_reference_op(self, command: str, ack: ACKs) -> tuple[str, bool]:
+    async def do_reference_op(self, command: str, ack: ACKs) -> tuple[str, bool]:
+        """Make a reference call"""
         cmd = (
             Header.reference.value
             + Header.pj_unit.value
@@ -279,7 +266,7 @@ class JVCCommander:
             + Footer.close.value
         )
 
-        msg, success = self.send_command(
+        msg, success = await self.send_command(
             cmd,
             ack=ACKs[ack.name].value,
             command_type=Header.reference.value,
