@@ -28,8 +28,35 @@ class JVCInput:
     port: int
     connect_timeout: int
 
+@dataclass
+class JVCAttributes: # pylint: disable=too-many-instance-attributes
+    """JVC Projector Attributes"""
+    power_state: bool = False
+    signal_status: str = ""
+    picture_mode: str = "" 
+    installation_mode: str = ""
+    laser_power: str = ""
+    laser_mode: str = ""
+    lamp_power: str = ""
+    model: str = ""
+    content_type: str = ""
+    content_type_trans: str = ""
+    hdr_data: str = ""
+    hdr_processing: str = ""
+    hdr_level: str = ""
+    theater_optimizer: str = ""
+    low_latency: bool = False
+    input_mode: str = ""
+    input_level: str = ""
+    color_mode: str = ""
+    aspect_ratio: str = ""
+    eshift: str = ""
+    mask_mode: str = ""
+    software_version: str = ""
+    lamp_time: int = 0
 
-class JVCProjectorCoordinator:
+
+class JVCProjectorCoordinator: # pylint: disable=too-many-public-methods
     """JVC Projector Control"""
 
     def __init__(
@@ -44,7 +71,8 @@ class JVCProjectorCoordinator:
         self.reader: asyncio.StreamReader = None
         self.writer: asyncio.StreamWriter = None
         self.model_family = ""
-        
+        # attribute mapping
+        self.attributes = JVCAttributes()
 
     async def _handshake(self) -> bool:
         """Perform an async 3-way handshake with the projector"""
@@ -62,7 +90,8 @@ class JVCProjectorCoordinator:
                 self.logger.error(result)
                 return False
 
-            await self.writer.sendall(pj_req)
+            self.writer.write(pj_req)
+            await self.writer.drain()
             msg_pjack = await self.reader.recv(len(PJ_ACK))
             if msg_pjack != PJ_ACK:
                 result = f"Exception with PJACK: {msg_pjack}"

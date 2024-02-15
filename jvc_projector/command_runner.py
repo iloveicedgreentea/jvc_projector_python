@@ -136,7 +136,8 @@ class JVCCommander:
         self.logger.debug("do_command sending command: %s", command)
         # send the command
         try:
-            await self.writer.write(command)
+            self.writer.write(command)
+            await self.writer.drain()
         except ConnectionError as err:
             # reaching this means the writer was closed somewhere
             self.logger.error(err)
