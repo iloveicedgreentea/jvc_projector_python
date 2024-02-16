@@ -1,39 +1,63 @@
 """
 Implements the JVC protocol
 """
+
 import asyncio
 from typing import Union
 import logging
 from dataclasses import dataclass
 
 from jvc_projector.command_runner import JVCCommander
-from jvc_projector.commands import (PJ_ACK, PJ_OK, PJ_REQ, ACKs,
-                                    AspectRatioModes, ColorSpaceModes,
-                                    Commands, ContentTypes, ContentTypeTrans,
-                                    Enum, EshiftModes, Footer, HdrData,
-                                    HdrLevel, HdrProcessing, Header,
-                                    InputLevel, InputModes, InstallationModes,
-                                    LampPowerModes, LaserDimModes,
-                                    LaserPowerModes, LowLatencyModes,
-                                    MaskModes, PictureModes, PowerStates,
-                                    SourceStatuses, TheaterOptimizer,
-                                    model_map)
+from jvc_projector.commands import (
+    PJ_ACK,
+    PJ_OK,
+    PJ_REQ,
+    ACKs,
+    AspectRatioModes,
+    ColorSpaceModes,
+    Commands,
+    ContentTypes,
+    ContentTypeTrans,
+    Enum,
+    EshiftModes,
+    Footer,
+    HdrData,
+    HdrLevel,
+    HdrProcessing,
+    Header,
+    InputLevel,
+    InputModes,
+    InstallationModes,
+    LampPowerModes,
+    LaserDimModes,
+    LaserPowerModes,
+    LowLatencyModes,
+    MaskModes,
+    PictureModes,
+    PowerStates,
+    SourceStatuses,
+    TheaterOptimizer,
+    model_map,
+)
 
 
 @dataclass
 class JVCInput:
     """JVC Projector Input"""
+
     host: str
     password: str
     port: int
     connect_timeout: int
 
+
 @dataclass
-class JVCAttributes: # pylint: disable=too-many-instance-attributes
+class JVCAttributes:  # pylint: disable=too-many-instance-attributes
     """JVC Projector Attributes"""
+
     power_state: bool = False
     signal_status: str = ""
-    picture_mode: str = "" 
+    picture_mode: str = ""
     installation_mode: str = ""
     laser_power: str = ""
     laser_mode: str = ""
@@ -56,7 +80,7 @@ class JVCAttributes: # pylint: disable=too-many-instance-attributes
     lamp_time: int = 0
 
 
-class JVCProjectorCoordinator: # pylint: disable=too-many-public-methods
+class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
     """JVC Projector Control"""
 
     def __init__(
@@ -86,7 +110,9 @@ class JVCProjectorCoordinator: # pylint: disable=too-many-public-methods
             msg_pjok = await self.reader.recv(len(PJ_OK))
             self.logger.debug(msg_pjok)
             if msg_pjok != PJ_OK:
-                result = f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
+                result = (
+                    f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
+                )
                 self.logger.error(result)
                 return False
 
@@ -128,8 +154,14 @@ class JVCProjectorCoordinator: # pylint: disable=too-many-public-methods
         """Open a connection to the projector asynchronously"""
         while True:
             try:
-                self.logger.info("Connecting to JVC Projector: %s:%s", self.options.host, self.options.port)
-                self.reader, self.writer = await asyncio.open_connection(self.options.host, self.options.port)
+                self.logger.info(
+                    "Connecting to JVC Projector: %s:%s",
+                    self.options.host,
+                    self.options.port,
+                )
+                self.reader, self.writer = await asyncio.open_connection(
+                    self.options.host, self.options.port
+                )
                 # Set the reader and writer for the commander
                 self.commander.reader = self.reader
                 self.commander.writer = self.writer
@@ -151,23 +183,25 @@ class JVCProjectorCoordinator: # pylint: disable=too-many-public-methods
                 await asyncio.sleep(2)
 
     def exec_command(
-         self, command: Union[list[str], str], command_type: bytes = b"!"
-     ) -> tuple[str, bool]:
-         """
-         Wrapper for commander.send_command() externally
-         command: a str of the command and value, separated by a comma ("power,on").
-             or a list of commands
-         This is to make home assistant UI use easier
-         command_type: which operation, like ! or ? (default = !)
-         Returns
-             (
-                 ack or error message: str,
-                 success flag: bool
-             )
-         """
-         self.logger.debug("exec_command Executing command: %s - %s", command, command_type)
-         return self.commander.send_command(command, command_type)
-    
+        self, command: Union[list[str], str], command_type: bytes = b"!"
+    ) -> tuple[str, bool]:
+        """
+        Wrapper for commander.send_command() externally
+        command: a str of the command and value, separated by a comma ("power,on").
+            or a list of commands
+        This is to make home assistant UI use easier
+        command_type: which operation, like ! or ? (default = !)
+        Returns
+            (
+                ack or error message: str,
+                success flag: bool
+            )
+        """
+        self.logger.debug(
+            "exec_command Executing command: %s - %s", command, command_type
+        )
+        return self.commander.send_command(command, command_type)
+
     async def close_connection(self):
         """Close the projector connection asynchronously"""
         self.writer.close()
@@ -218,7 +252,9 @@ class JVCProjectorCoordinator: # pylint: disable=too-many-public-methods
         """
         Get the current state of LL
         """
-        return await self._get_attribute("low_latency", ACKs.picture_ack, LowLatencyModes)
+        return await self._get_attribute(
+            "low_latency", ACKs.picture_ack, LowLatencyModes
+        )
 
     async def get_picture_mode(self) -> str:
         """
@@ -230,7 +266,9 @@ class JVCProjectorCoordinator: # pylint: disable=too-many-public-methods
         """
         Get the current install mode as str
         """
-        return await self._get_attribute("installation_mode", ACKs.install_acks, InstallationModes)
+        return await self._get_attribute(
+            "installation_mode", ACKs.install_acks, InstallationModes
+        )
 
     async def get_input_mode(self) -> str:
         """
@@ -285,13 +323,17 @@ class JVCProjectorCoordinator: # pylint: disable=too-many-public-methods
         """
         Get the current auto content transition type
         """
-        return await self._get_attribute("content_type_trans", ACKs.picture_ack, ContentTypeTrans)
+        return await self._get_attribute(
+            "content_type_trans", ACKs.picture_ack, ContentTypeTrans
+        )
 
     async def get_hdr_processing(self) -> str:
         """
         Get the current hdr processing setting like frame by frame. Will fail if not in HDR mode!
         """
-        return await self._get_attribute("hdr_processing", ACKs.picture_ack, HdrProcessing)
+        return await self._get_attribute(
+            "hdr_processing", ACKs.picture_ack, HdrProcessing
+        )
 
     async def get_hdr_level(self) -> str:
         """
@@ -322,25 +364,33 @@ class JVCProjectorCoordinator: # pylint: disable=too-many-public-methods
         """
         Get the current laser power NZ only
         """
-        return await self._get_attribute("laser_power", ACKs.picture_ack, LaserPowerModes)
+        return await self._get_attribute(
+            "laser_power", ACKs.picture_ack, LaserPowerModes
+        )
 
     async def get_theater_optimizer_state(self) -> str:
         """
         If theater optimizer is on/off Will fail if not in HDR mode!
         """
-        return await self._get_attribute("theater_optimizer", ACKs.picture_ack, TheaterOptimizer)
+        return await self._get_attribute(
+            "theater_optimizer", ACKs.picture_ack, TheaterOptimizer
+        )
 
     async def get_aspect_ratio(self) -> str:
         """
         Return aspect ratio
         """
-        return await self._get_attribute("aspect_ratio", ACKs.hdmi_ack, AspectRatioModes)
+        return await self._get_attribute(
+            "aspect_ratio", ACKs.hdmi_ack, AspectRatioModes
+        )
 
     async def get_source_status(self) -> str:
         """
         Return source status
         """
-        return await self._get_attribute("source_status", ACKs.source_ack, SourceStatuses)
+        return await self._get_attribute(
+            "source_status", ACKs.source_ack, SourceStatuses
+        )
 
     async def _get_power_state(self) -> str:
         """

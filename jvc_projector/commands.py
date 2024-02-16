@@ -1,6 +1,7 @@
 """
 All the enums for commands
 """
+
 from enum import Enum
 from typing import Final
 
@@ -24,6 +25,7 @@ model_map = {
     "XHK2": "RS4910",
     "XHK3": "X700R||X900R",
 }
+
 
 # pylint: disable=missing-class-docstring invalid-name
 class Header(Enum):
@@ -53,6 +55,7 @@ class ACKs(Enum):
     info_ack = b"IF"
     model = b"MD"
     source_ack = b"SC"
+
 
 PJ_OK: Final = ACKs.greeting.value
 PJ_ACK: Final = ACKs.pj_ack.value
@@ -112,6 +115,7 @@ class PictureModes(Enum):
     frame_adapt_hdr2 = b"18"  # requires firmware 2.0
     frame_adapt_hdr3 = b"19"  # requires firmware 2.0
 
+
 class PictureModes3D(Enum):
     natural = b"1"
     user1 = b"2"
@@ -120,6 +124,7 @@ class PictureModes3D(Enum):
     cinema = b"8"
     film = b"9"
     last = b"F"
+
 
 class InstallationModes(Enum):
     mode1 = b"0"
@@ -257,6 +262,7 @@ class ContentTypes(Enum):
     hdr10 = b"3"
     hlg = b"4"
 
+
 class ContentTypeTrans(Enum):
     # Auto Transition Values
     sdr = b"1"
@@ -290,6 +296,7 @@ class HdrData(Enum):
     hdr10_plus = b"4"
     none = b"F"
 
+
 class HdrLevel(Enum):
     auto = b"0"
     min2 = b"1"
@@ -310,11 +317,13 @@ class SourceStatuses(Enum):
     no_signal = b"0"
     signal = b"1"
 
+
 class ThreeD(Enum):
     twoD = b"0"
     auto = b"1"
     sbs = b"3"
     tb = b"4"
+
 
 class Commands(Enum):
 

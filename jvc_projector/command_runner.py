@@ -5,9 +5,11 @@ import time
 from typing import Union
 
 from jvc_projector.commands import ACKs, Commands, Footer, Header
-from jvc_projector.error_classes import (BlankMessageError,
-                                         CommandTimeoutError,
-                                         ConnectionClosedError)
+from jvc_projector.error_classes import (
+    BlankMessageError,
+    CommandTimeoutError,
+    ConnectionClosedError,
+)
 from jvc_projector.jvc_projector import JVCInput
 
 
@@ -18,7 +20,13 @@ class JVCCommander:
     Handles sending commands to the projector
     """
 
-    def __init__(self, options: JVCInput, logger: logging.Logger = logging.getLogger(__name__), reader: asyncio.StreamReader = None, writer: asyncio.StreamWriter = None) -> None:
+    def __init__(
+        self,
+        options: JVCInput,
+        logger: logging.Logger = logging.getLogger(__name__),
+        reader: asyncio.StreamReader = None,
+        writer: asyncio.StreamWriter = None,
+    ) -> None:
         self.host = options.host
         self.port = options.port
         # NZ models have password authentication
@@ -90,7 +98,9 @@ class JVCCommander:
                     return await self._do_command(cons_command, ack.value, command_type)
             else:
                 try:
-                    cons_command, ack = self._construct_command(send_command, command_type)
+                    cons_command, ack = self._construct_command(
+                        send_command, command_type
+                    )
                 except TypeError:
                     cons_command = send_command
 
@@ -98,7 +108,12 @@ class JVCCommander:
                     return cons_command, ack
                 return await self._do_command(cons_command, ack.value, command_type)
             return "No command provided", False
-        except (ConnectionClosedError, CommandTimeoutError, BlankMessageError, ConnectionRefusedError) as err:
+        except (
+            ConnectionClosedError,
+            CommandTimeoutError,
+            BlankMessageError,
+            ConnectionRefusedError,
+        ) as err:
             return str(err), False
 
     async def emulate_remote(self, remote_code: str) -> tuple[str, bool]:
@@ -146,9 +161,7 @@ class JVCCommander:
         # if we send a command that returns info, the projector will send
         # an ack, followed by the actual message. Check to see if the ack sent by
         # projector is correct, then return the message.
-        ack_value = (
-            Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
-        )
+        ack_value = Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
         self.logger.debug("constructed ack_value: %s", ack_value)
 
         # Receive the acknowledgement from PJ
@@ -248,4 +261,4 @@ class JVCCommander:
         if success:
             msg = self.replace_headers(msg)
 
-        return msg, success     
+        return msg, success
