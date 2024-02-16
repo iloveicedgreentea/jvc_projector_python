@@ -91,12 +91,14 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
     ):
         self.options = options
         self.logger = logger
-        self.commander = JVCCommander(options, logger, self.reader, self.writer)
         self.reader: asyncio.StreamReader = None
         self.writer: asyncio.StreamWriter = None
+        self.commander = JVCCommander(options.host, options.port, options.password, options.connect_timeout, logger, self.reader, self.writer)
         self.model_family = ""
+        self.connection_open = False
         # attribute mapping
         self.attributes = JVCAttributes()
+        self.lock = asyncio.Lock()
 
     async def _handshake(self) -> bool:
         """Perform an async 3-way handshake with the projector"""
@@ -107,23 +109,24 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             pj_req = PJ_REQ
 
         try:
-            msg_pjok = await self.reader.recv(len(PJ_OK))
-            self.logger.debug(msg_pjok)
-            if msg_pjok != PJ_OK:
-                result = (
-                    f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
-                )
-                self.logger.error(result)
-                return False
+            async with self.lock:
+                msg_pjok = await self.reader.read(len(PJ_OK))
+                self.logger.debug(msg_pjok)
+                if msg_pjok != PJ_OK:
+                    result = (
+                        f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
+                    )
+                    self.logger.error(result)
+                    return False
 
-            self.writer.write(pj_req)
-            await self.writer.drain()
-            msg_pjack = await self.reader.recv(len(PJ_ACK))
-            if msg_pjack != PJ_ACK:
-                result = f"Exception with PJACK: {msg_pjack}"
-                self.logger.error(result)
-                return False
-            self.logger.debug("Handshake successful")
+                self.writer.write(pj_req)
+                await self.writer.drain()
+                msg_pjack = await self.reader.read(len(PJ_ACK))
+                if msg_pjack != PJ_ACK:
+                    result = f"Exception with PJACK: {msg_pjack}"
+                    self.logger.error(result)
+                    return False
+                self.logger.debug("Handshake successful")
         except asyncio.TimeoutError:
             return False
 
@@ -139,7 +142,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             + Commands.get_model.value
             + Footer.close.value
         )
-
+        # TODO: why does getting model take so long
         res, _ = await self.commander.send_command(
             cmd,
             command_type=Header.reference.value,
@@ -173,6 +176,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                 if not success:
                     return False
                 self.logger.info("Handshake and connection completed")
+                self.connection_open = True
                 return True
             except asyncio.TimeoutError:
                 self.logger.warning("Connection timed out, retrying in 2 seconds")
@@ -182,7 +186,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                 self.logger.debug(err)
                 await asyncio.sleep(2)
 
-    def exec_command(
+    async def exec_command(
         self, command: Union[list[str], str], command_type: bytes = b"!"
     ) -> tuple[str, bool]:
         """
@@ -200,7 +204,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         self.logger.debug(
             "exec_command Executing command: %s - %s", command, command_type
         )
-        return self.commander.send_command(command, command_type)
+        return await self.commander.send_command(command, command_type)
 
     async def close_connection(self):
         """Close the projector connection asynchronously"""
@@ -245,7 +249,10 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Generic function to get the current attribute asynchronously
         """
-        state, _ = await self.commander.do_reference_op(command, ack.value)
+        state, res = await self.commander.do_reference_op(command, ack.value)
+        if not res:
+            return state, res
+        # TODO: test this below
         return state_enum(state.replace(ack.value, b"")).name
 
     async def get_low_latency_state(self) -> str:
@@ -310,7 +317,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Get the current software version
         """
-        state, _ = self.commander.do_reference_op("get_software_version", ACKs.info_ack)
+        state, _ = await self.commander.do_reference_op("get_software_version", ACKs.info_ack)
         return state.replace(ACKs.info_ack.value, b"")
 
     async def get_content_type(self) -> str:
@@ -357,7 +364,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Get the current lamp time
         """
-        state, _ = self.commander.do_reference_op("lamp_time", ACKs.info_ack)
+        state, _ = await self.commander.do_reference_op("lamp_time", ACKs.info_ack)
         return int(state.replace(ACKs.info_ack.value, b""), 16)
 
     async def get_laser_power(self) -> str:

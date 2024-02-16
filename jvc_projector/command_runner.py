@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import socket
-import time
 from typing import Union
 
 from jvc_projector.commands import ACKs, Commands, Footer, Header
@@ -10,7 +9,6 @@ from jvc_projector.error_classes import (
     CommandTimeoutError,
     ConnectionClosedError,
 )
-from jvc_projector.jvc_projector import JVCInput
 
 
 class JVCCommander:
@@ -22,20 +20,24 @@ class JVCCommander:
 
     def __init__(
         self,
-        options: JVCInput,
+        host="",
+        port=0,
+        password="",
+        timeout="",
         logger: logging.Logger = logging.getLogger(__name__),
         reader: asyncio.StreamReader = None,
         writer: asyncio.StreamWriter = None,
     ) -> None:
-        self.host = options.host
-        self.port = options.port
+        self.host = host
+        self.port = port
         # NZ models have password authentication
-        self.password = options.password
-        self.connect_timeout: int = options.connect_timeout
+        self.password = password
+        self.connect_timeout: int = timeout
         self.logger = logger
 
         self.reader = reader
         self.writer = writer
+        self.lock = asyncio.Lock()
 
     def replace_headers(self, item: bytes) -> bytes:
         """
@@ -87,7 +89,10 @@ class JVCCommander:
                         _, value = send_command[0].split(",")
                         return await self.emulate_remote(value)
                     except ValueError:
-                        return f"No value for remote command provided {send_command}", False
+                        return (
+                            f"No value for remote command provided {send_command}",
+                            False,
+                        )
 
                 for cmd in send_command:
                     cons_command, ack = self._construct_command(cmd, command_type)
@@ -166,8 +171,11 @@ class JVCCommander:
 
         # Receive the acknowledgement from PJ
         try:
-            # most commands timeout when PJ is off
-            received_msg = await self.reader.read(len(ack_value))
+            async with self.lock:
+                # most commands timeout when PJ is off
+                # this should read the ack value not the msg
+                received_msg = await self.reader.read(len(ack_value))
+                self.logger.debug("received msg in _do_command: %s", received_msg)
         except socket.timeout as err:
             error = f"Timed out. Command {command} may grayed out or cmd is running already."
             self.logger.debug(err)
@@ -176,12 +184,10 @@ class JVCCommander:
         except ConnectionRefusedError as err:
             self.logger.debug(err)
             raise ConnectionRefusedError(error) from err
-
-        self.logger.debug("received msg from PJ: %s", received_msg)
-
+        # read the actual message, if any
         msg = await self._check_received_msg(received_msg, ack_value, command_type)
         if msg == b"":
-            self.logger.error("Got a blank msg. Restarting connection")
+            self.logger.error("Got a blank msg")
             raise BlankMessageError("Got a blank msg")
 
         # if all fine, return the value
@@ -190,6 +196,12 @@ class JVCCommander:
     async def _check_received_msg(
         self, received_msg: bytes, ack_value: bytes, command_type: bytes
     ) -> bytes:
+        self.logger.debug(
+            "received msg is: %s and ack value is %s and type %s",
+            received_msg,
+            ack_value,
+            command_type,
+        )
         # This is unlikely to happen unless we read blank response
         if received_msg == b"":
             return received_msg
@@ -201,10 +213,11 @@ class JVCCommander:
         # if we got what we expect and this is a reference,
         # receive the data we requested
         if received_msg == ack_value and command_type == Header.reference.value:
-            message = await self.reader.read()
-            self.logger.debug("received message from PJ: %s", message)
+            async with self.lock:
+                message = await self.reader.read()
+                self.logger.debug("received message from PJ: %s", message)
 
-            return message
+                return message
 
         self.logger.error(
             "Received ack: %s != expected ack: %s",
@@ -245,18 +258,33 @@ class JVCCommander:
 
     async def do_reference_op(self, command: str, ack: ACKs) -> tuple[str, bool]:
         """Make a reference call"""
+        # has to be bytes
+        command = command.encode("utf-8")
+        self.logger.debug(
+            "do_reference_op values: %s - %s - %s - %s",
+            Header.reference.value,
+            Header.pj_unit.value,
+            Commands[command].value,
+            Footer.close.value,
+        )
+        self.logger.debug(
+            "do_reference_op Commands[command].value[0]: %s", Commands[command].value[0]
+        )
+
         cmd = (
             Header.reference.value
             + Header.pj_unit.value
             + Commands[command].value[0]
             + Footer.close.value
         )
+        self.logger.debug("do_reference_op cmd: %s", cmd)
 
         msg, success = await self.send_command(
             cmd,
-            ack=ACKs[ack.name].value,
+            ack=ack.value,
             command_type=Header.reference.value,
         )
+        self.logger.debug("do_reference_op msg: %s", msg)
 
         if success:
             msg = self.replace_headers(msg)

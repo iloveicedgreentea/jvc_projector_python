@@ -330,7 +330,7 @@ class Commands(Enum):
     # these use ! unless otherwise indicated
     # power commands
     power = b"PW", PowerModes, ACKs.power_ack
-
+    power_status = b"PW", PowerModes, ACKs.power_ack
     # lens memory /installation mode commands
     installation_mode = b"INML", InstallationModes, ACKs.lens_ack
 
@@ -339,7 +339,7 @@ class Commands(Enum):
 
     # status commands - Reference: ?
     # These should not be used directly
-    power_status = b"PW"
+
     current_output = b"IP"
     info = b"RC7374"
     remote = b"RC73"
