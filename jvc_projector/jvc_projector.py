@@ -249,7 +249,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Generic function to get the current attribute asynchronously
         """
-        state, res = await self.commander.do_reference_op(command, ack.value)
+        state, res = await self.commander.do_reference_op(command, ack)
         if not res:
             return state, res
         # TODO: test this below

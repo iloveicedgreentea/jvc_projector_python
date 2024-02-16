@@ -214,7 +214,7 @@ class JVCCommander:
         # receive the data we requested
         if received_msg == ack_value and command_type == Header.reference.value:
             async with self.lock:
-                message = await self.reader.read()
+                message = await self.reader.read(1000)
                 self.logger.debug("received message from PJ: %s", message)
 
                 return message
@@ -258,30 +258,16 @@ class JVCCommander:
 
     async def do_reference_op(self, command: str, ack: ACKs) -> tuple[str, bool]:
         """Make a reference call"""
-        # has to be bytes
-        command = command.encode("utf-8")
-        self.logger.debug(
-            "do_reference_op values: %s - %s - %s - %s",
-            Header.reference.value,
-            Header.pj_unit.value,
-            Commands[command].value,
-            Footer.close.value,
-        )
-        self.logger.debug(
-            "do_reference_op Commands[command].value[0]: %s", Commands[command].value[0]
-        )
-
+        # Ensure the command value is retrieved correctly as bytes
         cmd = (
             Header.reference.value
             + Header.pj_unit.value
             + Commands[command].value[0]
             + Footer.close.value
         )
-        self.logger.debug("do_reference_op cmd: %s", cmd)
-
         msg, success = await self.send_command(
             cmd,
-            ack=ack.value,
+            ack=ACKs[ack.name].value,
             command_type=Header.reference.value,
         )
         self.logger.debug("do_reference_op msg: %s", msg)
