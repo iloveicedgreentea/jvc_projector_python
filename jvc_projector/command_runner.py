@@ -87,14 +87,14 @@ class JVCCommander:
                         _, value = send_command[0].split(",")
                         return await self.emulate_remote(value)
                     except ValueError:
-                        return f"No value for command provided {send_command}", False
+                        return f"No value for remote command provided {send_command}", False
 
                 for cmd in send_command:
                     cons_command, ack = self._construct_command(cmd, command_type)
                     if not ack:
                         return cons_command, ack
                     # need a delay otherwise it kills connection
-                    time.sleep(0.1)
+                    await asyncio.sleep(0.1)
                     return await self._do_command(cons_command, ack.value, command_type)
             else:
                 try:
