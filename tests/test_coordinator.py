@@ -1,25 +1,13 @@
 import asyncio
 import os
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
 from jvc_projector.jvc_projector import JVCProjectorCoordinator, JVCInput
 from jvc_projector.commands import (
-    PJ_ACK,
-    PJ_OK,
-    PJ_REQ,
-    ACKs,
     AspectRatioModes,
     ColorSpaceModes,
-    Commands,
     ContentTypes,
     ContentTypeTrans,
-    Enum,
     EshiftModes,
-    Footer,
-    HdrData,
-    HdrLevel,
-    HdrProcessing,
-    Header,
     InputLevel,
     InputModes,
     InstallationModes,
@@ -29,10 +17,7 @@ from jvc_projector.commands import (
     LowLatencyModes,
     MaskModes,
     PictureModes,
-    PowerStates,
     SourceStatuses,
-    TheaterOptimizer,
-    model_map,
 )
 
 TEST_IP = "192.168.88.23"
@@ -47,15 +32,21 @@ os.environ["LOG_LEVEL"] = "DEBUG"
 
 class TestCoordinator(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        # set up connection
         options = JVCInput(TEST_IP, TEST_PASSWORD, TEST_PORT, 5)
         self.coordinator = JVCProjectorCoordinator(options)
+
+        # connect to PJ
         res = await self.coordinator.open_connection()
         assert res is True
+
         # Ensure projector is on
         is_on = await self.coordinator.is_on()
+        # turn on if not already
         if not is_on:
             _, res = await self.coordinator.power_on()
             assert res is True
+
         # wait for projector to turn on
         timeout = 120  # units technically, not really seconds but who cares
         while timeout > 0:
@@ -66,10 +57,12 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
             timeout -= 1
 
     async def asyncTearDown(self):
+        """clean up connection between tests otherwise error"""
         await self.coordinator.close_connection()
 
-    async def test_get_attribute(self):
-        """ensure we can get all attributes"""
+    async def assert_modes(self): # pylint: disable=too-many-local-variables
+        """helper function for attr"""
+        # in one test so it doesnt constantly open and close connection
         # check return value against eunm __members__
         low_latency_state = await self.coordinator.get_low_latency_state()
         assert (
@@ -191,6 +184,11 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
         is_ll_on = await self.coordinator.is_ll_on()
         assert isinstance(is_ll_on, bool), "is_ll_on is not a boolean"
 
+    async def test_exec_commands(self):
+        """test executing commands"""
+        # get attr
+        await self.assert_modes()
+
         # test commands
         _, res = await self.coordinator.exec_command(["menu, menu"])
         print(res)
@@ -198,6 +196,12 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
         # close menu
         if res:
             _, res = await self.coordinator.exec_command(["menu, menu"])
+
+    async def turn_off(self):
+        """unskip to turn off pj after tests"""
+        self.skipTest("not turning off")
+        _, res = await self.coordinator.exec_command("power, off")
+        assert res, "failed to turn off"
 
 
 if __name__ == "__main__":
