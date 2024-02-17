@@ -1,14 +1,14 @@
 # JVC Projector Python Library
 
-This implements new features, improvements, and optimizations inspired by https://github.com/bezmi/jvc_projector. This was made with NZ models in mind. Almost every function will work with NX models but I do not guarantee operability for them.
+This implements JVC IP Control in Python specifically for Home Assistant. Otherwise, I would have written this in Go. Almost every function will work with all JVC models but I do not guarantee operability for models that are not NX or NZ.
 
 This is designed to work with my Home Assistant plugin: https://github.com/iloveicedgreentea/jvc_homeassistant
 
 ## Installation
 
 ```
-# Assuming you have a venv with >=python3.10
-pip install jvc-projector-remote-improved2
+# Assuming you have a venv with >=python3.11
+pip install pyjvc
 ```
 
 ## Quick Start
