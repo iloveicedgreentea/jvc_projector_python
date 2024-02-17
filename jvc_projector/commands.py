@@ -1,7 +1,30 @@
 """
 All the enums for commands
 """
+
 from enum import Enum
+from typing import Final
+
+model_map = {
+    "B5A1": "NZ9",
+    "B5A2": "NZ8",
+    "B5A3": "NZ7",
+    "A2B1": "NX9",
+    "A2B2": "NX7",
+    "A2B3": "NX5",
+    "B2A1": "NX9",
+    "B2A2": "NX7",
+    "B2A3": "NX5",
+    "B5B1": "NP5",
+    "XHR1": "X570R",
+    "XHR3": "X770R||X970R",
+    "XHP1": "X5000",
+    "XHP2": "XC6890",
+    "XHP3": "X7000||X9000",
+    "XHK1": "X500R",
+    "XHK2": "RS4910",
+    "XHK3": "X700R||X900R",
+}
 
 
 # pylint: disable=missing-class-docstring invalid-name
@@ -32,6 +55,11 @@ class ACKs(Enum):
     info_ack = b"IF"
     model = b"MD"
     source_ack = b"SC"
+
+
+PJ_OK: Final = ACKs.greeting.value
+PJ_ACK: Final = ACKs.pj_ack.value
+PJ_REQ: Final = ACKs.pj_req.value
 
 
 class InputModes(Enum):
@@ -87,6 +115,7 @@ class PictureModes(Enum):
     frame_adapt_hdr2 = b"18"  # requires firmware 2.0
     frame_adapt_hdr3 = b"19"  # requires firmware 2.0
 
+
 class PictureModes3D(Enum):
     natural = b"1"
     user1 = b"2"
@@ -95,6 +124,7 @@ class PictureModes3D(Enum):
     cinema = b"8"
     film = b"9"
     last = b"F"
+
 
 class InstallationModes(Enum):
     mode1 = b"0"
@@ -232,6 +262,7 @@ class ContentTypes(Enum):
     hdr10 = b"3"
     hlg = b"4"
 
+
 class ContentTypeTrans(Enum):
     # Auto Transition Values
     sdr = b"1"
@@ -265,6 +296,7 @@ class HdrData(Enum):
     hdr10_plus = b"4"
     none = b"F"
 
+
 class HdrLevel(Enum):
     auto = b"0"
     min2 = b"1"
@@ -285,18 +317,20 @@ class SourceStatuses(Enum):
     no_signal = b"0"
     signal = b"1"
 
+
 class ThreeD(Enum):
     twoD = b"0"
     auto = b"1"
     sbs = b"3"
     tb = b"4"
 
+
 class Commands(Enum):
 
     # these use ! unless otherwise indicated
     # power commands
     power = b"PW", PowerModes, ACKs.power_ack
-
+    power_status = b"PW", PowerModes, ACKs.power_ack
     # lens memory /installation mode commands
     installation_mode = b"INML", InstallationModes, ACKs.lens_ack
 
@@ -305,7 +339,7 @@ class Commands(Enum):
 
     # status commands - Reference: ?
     # These should not be used directly
-    power_status = b"PW"
+
     current_output = b"IP"
     info = b"RC7374"
     remote = b"RC73"
