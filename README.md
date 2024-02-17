@@ -13,49 +13,13 @@ pip install jvc-projector-remote-improved2
 
 ## Quick Start
 
-Set your network password if you have an NZ model first.
+You must set your network password if you have an NZ model first.
 
-```python
-jvc = JVCProjector(host="ipaddr", connect_timeout=10, password="password")
-
-# Commands are passed as a single string delimited by a comma
-# open menu
-cmd = jvc.exec_command("menu, menu")
-# press left button
-cmd = jvc.exec_command("menu, left")
-# set picture mode to frame adapt HDR
-cmd = jvc.exec_command("picture_mode, frame_adapt_hdr")
-# turn on
-cmd = jvc.power_on()
-```
-
-## Usage
-
-See [quick-start](#quick-start) for importing
-
-The commands are structured to use simple command keywords and parameters. This makes it simple to remember commands. All names with spaces will have an underscore instead.
-
-```python
-Command: low_latency
-Parameter: off
-code: jvc.exec_command("low_latency, off")
-```
-
-```python
-Command: picture_mode
-Parameter: hdr_plus
-code: jvc.exec_command("picture_mode, hdr_plus")
-```
-
-You can also run multiple commands in a row by just giving it a list of commands
-
-```python
-jvc.exec_command(["picture_mode, hdr_plus", "motion_enhance, off"])
-```
+Refer to `tests/test_coordinator.py` examples on how to use this library
 
 Use `print_commands()` to get all the latest support commands. This is dynamically generated at runtime so it is always up to date.
 
-## Currently Supported Commands
+## Supported Commands
 
 - Power on/off
 - Lens Memory/Installation Modes
@@ -72,8 +36,7 @@ Use `print_commands()` to get all the latest support commands. This is dynamical
 - And many others
 
 ## Gaming/Film Modes
-I recommend setting up picture mode presets for each mode. Low latency toggle annoyingly will not work unless certain things are disabled first. 
-It will not disable things for you. 
+I recommend setting up picture mode presets for each mode. Low latency toggle annoyingly will not work unless certain things are disabled first. Toggling low latency will not flip these switches so you have to make sure conflicting settings are not active. Do not set low latency directly, just set up picture modes and switch between them.
 
 SDR Gaming: user1||natural, low latency on, etc
 HDR Gaming: hdr10, low latency on, etc
@@ -84,35 +47,26 @@ Then use the commands to switch between picture modes.
 
 ## Supported Models
 
+### Tested
 - NZ7/NZ8/NZ9 (Network password is required)
 - NX5/NX7/NX9
-- Most likely any other D-ILA projector, and possibly older models with ethernet cables.
+
+### User Reported
+- All D-ILA projector
+- Various older models such as X5000
+- Generally anything with an ethernet port should work
 
 ## Home Assistant
+Designed to work with my Home Assistant plugin.
 
-```yaml
-# configuration.yaml
-remote:
-  - platform: jvc_projectors
-    name: nz7
-    password: password
-    host: 192.168.1.2
-    scan_interval: 30
-```
+Refer to [JVC Homeassistant](https://github.com/iloveicedgreentea/jvc_homeassistant)
 
 ## Development
 
 ```shell
-# Create venv
-python3 -m venv .venv
-source .venv/bin/activate
+make dev_install
 ```
 
-```shell
-# Edit env
-cp .env.template .env
-# edit .env with values
-```
 ## Supported Commands
 
 `$command,$parameter`
@@ -326,19 +280,7 @@ All commands are stored in Enums within `commands.py` so simply adding them to t
 
 ### Testing
 
-JVC_TEST_POWER: true/false to test power functions
-JVC_TEST_FUNCTIONS: true/false to test various button functions
+Tests are located in `./tests`
 
-You can run the test at the local device or run a mock server I made (WIP) to test commands
-
-```shell
-# Venv in one window
-python mock/mochrie.py
 ```
-
-```shell
-# Run tests in other window
-source .env
-export JVC_HOST=127.0.0.1
-make test
-```
+make test```
