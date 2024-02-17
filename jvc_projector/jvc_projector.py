@@ -93,7 +93,15 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         self.logger = logger
         self.reader: asyncio.StreamReader = None
         self.writer: asyncio.StreamWriter = None
-        self.commander = JVCCommander(options.host, options.port, options.password, options.connect_timeout, logger, self.reader, self.writer)
+        self.commander = JVCCommander(
+            options.host,
+            options.port,
+            options.password,
+            options.connect_timeout,
+            logger,
+            self.reader,
+            self.writer,
+        )
         self.model_family = ""
         self.connection_open = False
         # attribute mapping
@@ -113,9 +121,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                 msg_pjok = await self.reader.read(len(PJ_OK))
                 self.logger.debug(msg_pjok)
                 if msg_pjok != PJ_OK:
-                    result = (
-                        f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
-                    )
+                    result = f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
                     self.logger.error(result)
                     return False
 
@@ -142,7 +148,6 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             + Commands.get_model.value
             + Footer.close.value
         )
-        # TODO: why does getting model take so long
         res, _ = await self.commander.send_command(
             cmd,
             command_type=Header.reference.value,
@@ -249,11 +254,17 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Generic function to get the current attribute asynchronously
         """
-        state, res = await self.commander.do_reference_op(command, ack)
-        if not res:
-            return state, res
-        # TODO: test this below
-        return state_enum(state.replace(ack.value, b"")).name
+        try:
+            state, res = await self.commander.do_reference_op(command, ack)
+            if not res:
+                return state, res
+            return state_enum(state.replace(ack.value, b"")).name
+        except ValueError:
+            self.logger.error("Attribute not found")
+            return "unknown"
+        except AttributeError as err:
+            self.logger.error("tried to access name on non-enum: %s", err)
+            return ""
 
     async def get_low_latency_state(self) -> str:
         """
@@ -317,8 +328,11 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Get the current software version
         """
-        state, _ = await self.commander.do_reference_op("get_software_version", ACKs.info_ack)
-        return state.replace(ACKs.info_ack.value, b"")
+        state, _ = await self.commander.do_reference_op(
+            "get_software_version", ACKs.info_ack
+        )
+        # returns something like 0210PJ as bytes
+        return state.replace(ACKs.info_ack.value, b"").replace(b"PJ", b"").decode()
 
     async def get_content_type(self) -> str:
         """
