@@ -77,6 +77,7 @@ class JVCAttributes:  # pylint: disable=too-many-instance-attributes
     eshift: str = ""
     mask_mode: str = ""
     software_version: str = ""
+    laser_time: int = 0
     lamp_time: int = 0
 
 
