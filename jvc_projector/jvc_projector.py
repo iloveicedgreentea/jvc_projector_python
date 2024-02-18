@@ -63,6 +63,7 @@ class JVCAttributes:  # pylint: disable=too-many-instance-attributes
     resolution: str = ""
     low_latency: bool = False
     laser_power: str = ""
+    laser_value: int = 0
     laser_mode: str = ""
     lamp_power: str = ""
     model: str = ""
@@ -349,7 +350,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
 
     async def get_laser_value(self) -> int:
         """
-        Get the current software version
+        Get the current software version FW 3.0+ only
         """
         state, _ = await self.commander.do_reference_op("laser_value", ACKs.picture_ack)
         return int(state.replace(ACKs.picture_ack.value, b""), 16)
