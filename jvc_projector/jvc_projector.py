@@ -219,11 +219,17 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
 
     async def close_connection(self):
         """Close the projector connection asynchronously"""
-        self.writer.close()
-        await self.writer.wait_closed()
-        self.commander.reader = self.reader
-        self.commander.writer = self.writer
-        self.logger.info("Connection closed")
+        try:
+            if self.writer:
+                self.writer.close()
+                await self.writer.wait_closed()
+            self.commander.reader = self.reader
+            self.commander.writer = self.writer
+            self.logger.info("Connection closed")
+        except BrokenPipeError:
+            self.logger.warning("Connection already closed - Broken pipe encountered")
+        except Exception as e:
+            self.logger.error("Error closing JVC Projector connection - %s", e)
 
     async def info(self) -> tuple[str, bool]:
         """
