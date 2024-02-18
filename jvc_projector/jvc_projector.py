@@ -12,6 +12,7 @@ from jvc_projector.commands import (
     PJ_ACK,
     PJ_OK,
     PJ_REQ,
+    ResolutionModes,
     ACKs,
     AspectRatioModes,
     ColorSpaceModes,
@@ -34,6 +35,7 @@ from jvc_projector.commands import (
     LowLatencyModes,
     MaskModes,
     PictureModes,
+    AnamorphicModes,
     PowerStates,
     SourceStatuses,
     TheaterOptimizer,
@@ -58,24 +60,27 @@ class JVCAttributes:  # pylint: disable=too-many-instance-attributes
     power_state: bool = False
     signal_status: str = ""
     picture_mode: str = ""
-    installation_mode: str = ""
+    resolution: str = ""
+    low_latency: bool = False
     laser_power: str = ""
+    laser_value: int = 0
     laser_mode: str = ""
     lamp_power: str = ""
     model: str = ""
+    installation_mode: str = ""
     content_type: str = ""
     content_type_trans: str = ""
     hdr_data: str = ""
     hdr_processing: str = ""
     hdr_level: str = ""
     theater_optimizer: str = ""
-    low_latency: bool = False
     input_mode: str = ""
     input_level: str = ""
     color_mode: str = ""
-    aspect_ratio: str = ""
     eshift: str = ""
     mask_mode: str = ""
+    aspect_ratio: str = ""
+    anamophic_mode: str = ""
     software_version: str = ""
     laser_time: int = 0
     lamp_time: int = 0
@@ -214,11 +219,17 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
 
     async def close_connection(self):
         """Close the projector connection asynchronously"""
-        self.writer.close()
-        await self.writer.wait_closed()
-        self.commander.reader = self.reader
-        self.commander.writer = self.writer
-        self.logger.info("Connection closed")
+        try:
+            if self.writer:
+                self.writer.close()
+                await self.writer.wait_closed()
+            self.commander.reader = self.reader
+            self.commander.writer = self.writer
+            self.logger.info("Connection closed")
+        except BrokenPipeError:
+            self.logger.warning("Connection already closed - Broken pipe encountered")
+        except Exception as e:
+            self.logger.error("Error closing JVC Projector connection - %s", e)
 
     async def info(self) -> tuple[str, bool]:
         """
@@ -333,7 +344,22 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             "get_software_version", ACKs.info_ack
         )
         # returns something like 0210PJ as bytes
-        return state.replace(ACKs.info_ack.value, b"").replace(b"PJ", b"").decode()
+        ver: str = (
+            state.replace(ACKs.info_ack.value, b"")
+            .replace(b"PJ", b"")
+            .decode()
+            # remove leading 0
+            .lstrip("0")
+        )
+        # add a dot to the version
+        return f"{ver[:1]}.{ver[1:]}"
+
+    async def get_laser_value(self) -> int:
+        """
+        Get the current software version FW 3.0+ only
+        """
+        state, _ = await self.commander.do_reference_op("laser_value", ACKs.picture_ack)
+        return int(state.replace(ACKs.picture_ack.value, b""), 16)
 
     async def get_content_type(self) -> str:
         """
@@ -406,6 +432,12 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             "aspect_ratio", ACKs.hdmi_ack, AspectRatioModes
         )
 
+    async def get_anamorphic(self) -> str:
+        """
+        Return anamorphic mode
+        """
+        return await self._get_attribute("anamorphic", ACKs.lens_ack, AnamorphicModes)
+
     async def get_source_status(self) -> str:
         """
         Return source status
@@ -413,6 +445,16 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         return await self._get_attribute(
             "source_status", ACKs.source_ack, SourceStatuses
         )
+
+    async def get_source_display(self) -> str:
+        """
+        Return source display resolution like 4k_4096p60
+        """
+        res = await self._get_attribute(
+            "source_disaply", ACKs.info_ack, ResolutionModes
+        )
+
+        return res.replace("r_", "")
 
     async def _get_power_state(self) -> str:
         """

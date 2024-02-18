@@ -324,6 +324,66 @@ class ThreeD(Enum):
     sbs = b"3"
     tb = b"4"
 
+class ResolutionModes(Enum):
+    r_480p = b"02"
+    r_576p = b"03"
+    r_720p50 = b"04"
+    r_720p60 = b"05"
+    r_1080i50 = b"06"
+    r_1080i60 = b"07"
+    r_1080p24 = b"08"
+    r_1080p50 = b"09"
+    r_1080p60 = b"0A"
+    NoSignal = b"0B"
+    r_720p_3D = b"0C"
+    r_1080i_3D = b"0D"
+    r_1080p_3D = b"0E"
+    OutofRange = b"0F"
+    r_4K_4096p60 = b"10"
+    r_4K_4096p50 = b"11"
+    r_4K_4096p30 = b"12"
+    r_4K_4096p25 = b"13"
+    r_4K_4096p24 = b"14"
+    r_4K_3840p60 = b"15"
+    r_4K_3840p50 = b"16"
+    r_4K_3840p30 = b"17"
+    r_4K_3840p25 = b"18"
+    r_4K_3840p24 = b"19"
+    r_1080p25 = b"1C"
+    r_1080p30 = b"1D"
+    r_2048x1080p24 = b"1E"
+    r_2048x1080p25 = b"1F"
+    r_2048x1080p30 = b"20"
+    r_2048x1080p50 = b"21"
+    r_2048x1080p60 = b"22"
+    r_3840x2160p120 = b"23"
+    r_4096x2160p120 = b"24"
+    VGA_640x480 = b"25"
+    SVGA_800x600 = b"26"
+    XGA_1024x768 = b"27"
+    SXGA_1280x1024 = b"28"
+    WXGA_1280x768 = b"29"
+    WXGAplus_1440x900 = b"2A"
+    WSXGAplus_1680x1050 = b"2B"
+    WUXGA_1920x1200 = b"2C"
+    WXGA_1280x800 = b"2D"
+    FWXGA_1366x768 = b"2E"
+    WXGAplus_1600x900 = b"2F"
+    UXGA_1600x1200 = b"30"
+    QXGA = b"31"
+    WOXGA = b"32"
+    r_4096x2160_100Hz = b"34"
+    r_3840x2160_100Hz = b"35"
+    r_1080p100 = b"36"
+    r_1080p120 = b"37"
+    r_8K_7680x4320p60 = b"38"
+    r_8K_7680x4320p50 = b"39"
+    r_8K_7680x4320p30 = b"3A"
+    r_8K_7680x4320p25 = b"3B"
+    r_8K_7680x4320p24 = b"3C"
+    WQHD60 = b"3D"
+    WOQHD120 = b"3E"
+    r_8K_7680x4320p48 = b"3F"
 
 class Commands(Enum):
 
@@ -397,10 +457,12 @@ class Commands(Enum):
 
     # NZ Series Laser Dimming commands
     laser_mode = b"PMDC", LaserDimModes, ACKs.picture_ack
+    # fw 3.0 and up
+    laser_value = b"PMCV", int, ACKs.picture_ack
 
     # Lamp power
     lamp_power = b"PMLP", LampPowerModes, ACKs.picture_ack
-
+   
     # Lamp time
     lamp_time = b"IFLT", int, ACKs.info_ack
 
@@ -408,7 +470,6 @@ class Commands(Enum):
     aperture = b"PMDI", ApertureModes, ACKs.picture_ack
 
     # Anamorphic commands
-    # I don't use this, untested
     anamorphic = b"INVS", AnamorphicModes, ACKs.lens_ack
 
     # e-shift
@@ -416,6 +477,7 @@ class Commands(Enum):
 
     # source status
     source_status = b"SC", SourceStatuses, ACKs.source_ack
+    source_disaply = b"IFIS", ResolutionModes, ACKs.info_ack
 
     # 3d
     signal_3d = b"IS3D", ThreeD, ACKs.hdmi_ack
