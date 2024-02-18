@@ -9,11 +9,13 @@ from jvc_projector.commands import (
     ContentTypeTrans,
     EshiftModes,
     InputLevel,
+    AnamorphicModes,
     InputModes,
     InstallationModes,
     LampPowerModes,
     LaserDimModes,
     LaserPowerModes,
+    ResolutionModes,
     LowLatencyModes,
     MaskModes,
     PictureModes,
@@ -32,6 +34,7 @@ os.environ["LOG_LEVEL"] = "DEBUG"
 
 class TestCoordinator(unittest.IsolatedAsyncioTestCase):
     """Test running commands"""
+
     async def asyncSetUp(self):
         # set up connection
         options = JVCInput(TEST_IP, TEST_PASSWORD, TEST_PORT, 5)
@@ -71,9 +74,21 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
             LowLatencyModes.__members__,
             f"Unexpected low latency state: {low_latency_state}",
         )
+        # test getting resolution
+        res = await self.coordinator.get_source_display()
+        self.assertIn(res, ["4K_4096p24", "NoSignal"], "Source display not as expected")
 
+        res = await self.coordinator.get_anamorphic()
+        self.assertIn(res, AnamorphicModes.__members__, "Anamorphic not as expected")
+        
         res = await self.coordinator.get_software_version()
         self.assertIsInstance(res, str)  # sw can change, but should be str
+
+        # fw 3.0 and above
+        if float(res) > 210:
+            res = await self.coordinator.get_laser_value()
+            print(res)
+            self.assertIsInstance(res, int)
 
         picture_mode = await self.coordinator.get_picture_mode()
         self.assertIn(
