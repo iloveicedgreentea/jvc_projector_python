@@ -113,8 +113,8 @@ class JVCCommander:
                     return cons_command, ack
                 return await self._do_command(cons_command, ack.value, command_type)
             return "No command provided", False
+        # raise connectionclosed error to be handled by callers
         except (
-            ConnectionClosedError,
             CommandTimeoutError,
             BlankMessageError,
             ConnectionRefusedError,
@@ -160,7 +160,7 @@ class JVCCommander:
             await self.writer.drain()
         except ConnectionError as err:
             # reaching this means the writer was closed somewhere
-            self.logger.error(err)
+            self.logger.debug("ConnectionError in _do_command: %s", err)
             raise ConnectionClosedError(err) from err
 
         # if we send a command that returns info, the projector will send
