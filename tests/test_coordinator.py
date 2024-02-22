@@ -89,6 +89,7 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
             res = await self.coordinator.get_laser_value()
             print(res)
             self.assertIsInstance(res, int)
+            self.assertLess(res, 100, "Laser value is over 100")
 
         picture_mode = await self.coordinator.get_picture_mode()
         self.assertIn(

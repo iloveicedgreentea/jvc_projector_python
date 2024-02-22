@@ -6,6 +6,7 @@ import asyncio
 from typing import Union
 import logging
 from dataclasses import dataclass
+import math
 
 from jvc_projector.command_runner import JVCCommander
 from jvc_projector.commands import (
@@ -63,7 +64,7 @@ class JVCAttributes:  # pylint: disable=too-many-instance-attributes
     """JVC Projector Attributes"""
 
     power_state: bool = False
-    signal_status: str = ""
+    signal_status: str = "" # TODO: bool
     picture_mode: str = ""
     resolution: str = ""
     low_latency: bool = False
@@ -82,13 +83,13 @@ class JVCAttributes:  # pylint: disable=too-many-instance-attributes
     input_mode: str = ""
     input_level: str = ""
     color_mode: str = ""
-    eshift: str = ""
+    eshift: str = "" # TODO: bool
     mask_mode: str = ""
     aspect_ratio: str = ""
-    anamophic_mode: str = ""
-    software_version: str = ""
-    laser_time: int = 0
-    lamp_time: int = 0
+    anamorphic_mode: str = ""
+    software_version: str = "" # TODO: float
+    laser_time: int = 0 # TODO int
+    lamp_time: int = 0 # TODO int
     connection_active: bool = False
 
 
@@ -321,6 +322,10 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         except AttributeError as err:
             self.logger.error("tried to access name on non-enum: %s", err)
             return ""
+        except ConnectionClosedError:
+            self.logger.debug("Connection is closed for _get_attribute")
+            # open connection and try again
+            return "Connection closed"
 
     async def get_low_latency_state(self) -> str:
         """
@@ -384,26 +389,38 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Get the current software version
         """
-        state, _ = await self.commander.do_reference_op(
-            "get_software_version", ACKs.info_ack
-        )
-        # returns something like 0210PJ as bytes
-        ver: str = (
-            state.replace(ACKs.info_ack.value, b"")
-            .replace(b"PJ", b"")
-            .decode()
-            # remove leading 0
-            .lstrip("0")
-        )
-        # add a dot to the version
-        return f"{ver[:1]}.{ver[1:]}"
+        try:
+            state, _ = await self.commander.do_reference_op(
+                "get_software_version", ACKs.info_ack
+            )
+            # returns something like 0210PJ as bytes
+            ver: str = (
+                state.replace(ACKs.info_ack.value, b"")
+                .replace(b"PJ", b"")
+                .decode()
+                # remove leading 0
+                .lstrip("0")
+            )
+            # add a dot to the version
+            return f"{ver[:1]}.{ver[1:]}"
+        except ConnectionClosedError:
+            self.logger.debug("Connection is closed for _get_attribute")
+            # open connection and try again
+            return "Connection closed"
 
     async def get_laser_value(self) -> int:
         """
         Get the current software version FW 3.0+ only
         """
-        state, _ = await self.commander.do_reference_op("laser_value", ACKs.picture_ack)
-        return int(state.replace(ACKs.picture_ack.value, b""), 16)
+        try:
+            state, _ = await self.commander.do_reference_op("laser_value", ACKs.picture_ack)
+            raw = int(state.replace(ACKs.picture_ack.value, b""), 16)
+            # jvc returns a weird scale 
+            return math.floor(((raw - 109) / 1.1) + 0.5)
+        except ConnectionClosedError:
+            self.logger.debug("Connection is closed for _get_attribute")
+            # open connection and try again
+            return "Connection closed"
 
     async def get_content_type(self) -> str:
         """
@@ -449,8 +466,13 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Get the current lamp time
         """
-        state, _ = await self.commander.do_reference_op("lamp_time", ACKs.info_ack)
-        return int(state.replace(ACKs.info_ack.value, b""), 16)
+        try:
+            state, _ = await self.commander.do_reference_op("lamp_time", ACKs.info_ack)
+            return int(state.replace(ACKs.info_ack.value, b""), 16)
+        except ConnectionClosedError:
+            self.logger.debug("Connection is closed for _get_attribute")
+            # open connection and try again
+            return "Connection closed"
 
     async def get_laser_power(self) -> str:
         """
