@@ -74,6 +74,9 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
             LowLatencyModes.__members__,
             f"Unexpected low latency state: {low_latency_state}",
         )
+        _, res = await self.coordinator.exec_command(["laser_power, low"])
+        self.assertTrue(res, "failed to set laser power to low")
+        
         # test getting resolution
         res = await self.coordinator.get_source_display()
         self.assertIn(res, ["4K_4096p24", "NoSignal"], "Source display not as expected")
@@ -81,15 +84,6 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
         res = await self.coordinator.get_anamorphic()
         self.assertIn(res, AnamorphicModes.__members__, "Anamorphic not as expected")
         
-        res = await self.coordinator.get_software_version()
-        self.assertIsInstance(res, str)  # sw can change, but should be str
-
-        # fw 3.0 and above
-        if float(res) > 210:
-            res = await self.coordinator.get_laser_value()
-            print(res)
-            self.assertIsInstance(res, int)
-
         picture_mode = await self.coordinator.get_picture_mode()
         self.assertIn(
             picture_mode, PictureModes.__members__, "Picture mode not as expected."
@@ -126,7 +120,7 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
         eshift_mode = await self.coordinator.get_eshift_mode()
         self.assertIn(
             eshift_mode,
-            EshiftModes.__members__,
+            [True, False],
             f"Unexpected eshift mode: {eshift_mode}",
         )
 
@@ -148,7 +142,15 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
 
         # Testing software version
         software_version = await self.coordinator.get_software_version()
-        self.assertIsInstance(software_version, str, "Software version is not a string")
+        self.assertIsInstance(software_version, float, "Software version is not a float")
+        self.assertGreater(software_version, 0, "Software version is not greater than 0")
+        print(software_version)
+        # fw 3.0 and above
+        if software_version > 2.10:
+            res = await self.coordinator.get_laser_value()
+            print("laser value", res)
+            self.assertIsInstance(res, int)
+            self.assertLessEqual(res, 100, "Laser value is over 100")
 
         # Testing content type
         content_type = await self.coordinator.get_content_type()
@@ -185,6 +187,7 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
             LaserPowerModes.__members__,
             f"Unexpected laser power: {laser_power}",
         )
+        print("laser power", laser_power)
 
         # Testing aspect ratio
         aspect_ratio = await self.coordinator.get_aspect_ratio()
@@ -198,9 +201,11 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
         source_status = await self.coordinator.get_source_status()
         self.assertIn(
             source_status,
-            SourceStatuses.__members__,
+            [True, False],
             f"Unexpected source status: {source_status}",
         )
+        self.assertIsInstance(source_status, bool)
+        print("source status", source_status)
 
         # Testing is_on
         is_on = await self.coordinator.is_on()
