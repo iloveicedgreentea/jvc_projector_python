@@ -406,7 +406,7 @@ class Commands(Enum):
 
     # Checking for model code
     # response -> \x40\x89\x01\x4D\x44(the model code)\x0A
-    get_model = b"MD"
+    get_model = b"MD", str, ACKs.model
 
     # software version
     get_software_version = b"IFSV", str, ACKs.info_ack
