@@ -249,6 +249,8 @@ class JVCCommander:
         # split command into the base and the action like menu: left
         self.logger.debug("raw_command: %s", raw_command)
         try:
+            if isinstance(raw_command, list):
+                raw_command = raw_command[0]
             command, value = raw_command.split(",")
         except ValueError:
             # support single commands like get_model
@@ -272,7 +274,7 @@ class JVCCommander:
 
         return command, ack.value
 
-    async def do_reference_op(self, command: str, ack: ACKs) -> tuple[str, bool]:
+    async def do_reference_op(self, command: str, ack: ACKs) -> str:
         """Make a reference call"""
         # Ensure the command value is retrieved correctly as bytes
         msg = await self.send_command(

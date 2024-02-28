@@ -223,7 +223,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         )
         # TODO:should this translate list command to the string value?
         # TODO: use the add to queue command exec_command should not care about return types or anything
-    
+
         return await self.commander.send_command(command, command_type)
 
     async def close_connection(self):
@@ -284,22 +284,20 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         return await self.exec_command("power,off")
 
-    # TODO: lookup the enum touple instead of passing in the attributes
     async def _get_attribute(self, command: str) -> str:
         """
         Generic function to get the current attribute asynchronously
         """
         cmd_tup = Commands[command].value
-        cmd = cmd_tup[0]
         cmd_enum = cmd_tup[1]
         ack = cmd_tup[2]
-        # TODO: use above
         try:
             state = await self.commander.do_reference_op(command, ack)
+            # remove the returned headers
             r = self.commander.replace_headers(state)
             self.logger.debug("Attribute %s is %s", command, r)
+            # look up the enum value like b"1" -> on in PowerModes
             return cmd_enum(r.replace(ack.value, b"")).name
-        # TODO: replace headers
         except ValueError as err:
             self.logger.error("Attribute not found - %s", err)
             raise
@@ -315,67 +313,63 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Get the current state of LL
         """
-        return await self._get_attribute(
-            "low_latency", ACKs.picture_ack, LowLatencyModes
-        )
+        return await self._get_attribute("low_latency")
 
     async def get_picture_mode(self) -> str:
         """
         Get the current picture mode as str -> user1, natural
         """
-        return await self._get_attribute("picture_mode", ACKs.picture_ack, PictureModes)
+        return await self._get_attribute("picture_mode")
 
     async def get_install_mode(self) -> str:
         """
         Get the current install mode as str
         """
-        return await self._get_attribute(
-            "installation_mode", ACKs.install_acks, InstallationModes
-        )
+        return await self._get_attribute("installation_mode")
 
     async def get_input_mode(self) -> str:
         """
         Get the current input mode
         """
-        return await self._get_attribute("input_mode", ACKs.input_ack, InputModes)
+        return await self._get_attribute("input_mode")
 
     async def get_mask_mode(self) -> str:
         """
         Get the current mask mode
         """
-        return await self._get_attribute("mask", ACKs.hdmi_ack, MaskModes)
+        return await self._get_attribute("mask")
 
     async def get_laser_mode(self) -> str:
         """
         Get the current laser mode
         """
-        return await self._get_attribute("laser_mode", ACKs.picture_ack, LaserDimModes)
+        return await self._get_attribute("laser_mode")
 
     async def get_eshift_mode(self) -> bool:
         """
         Get the current eshift mode
         """
-        res = await self._get_attribute("eshift_mode", ACKs.picture_ack, EshiftModes)
+        res = await self._get_attribute("eshift_mode")
         return res == "on"
 
     async def get_color_mode(self) -> str:
         """
         Get the current color mode
         """
-        return await self._get_attribute("color_mode", ACKs.hdmi_ack, ColorSpaceModes)
+        return await self._get_attribute("color_mode")
 
     async def get_input_level(self) -> str:
         """
         Get the current input level
         """
-        return await self._get_attribute("input_level", ACKs.hdmi_ack, InputLevel)
+        return await self._get_attribute("input_level")
 
     async def get_software_version(self) -> float:
         """
         Get the current software version
         """
         try:
-            state, _ = await self.commander.do_reference_op(
+            state = await self.commander.do_reference_op(
                 "get_software_version", ACKs.info_ack
             )
             # returns something like 0210PJ as bytes
@@ -398,7 +392,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         Get the current software version FW 3.0+ only
         """
         try:
-            state, _ = await self.commander.do_reference_op(
+            state = await self.commander.do_reference_op(
                 "laser_value", ACKs.picture_ack
             )
             raw = int(state.replace(ACKs.picture_ack.value, b""), 16)
@@ -413,48 +407,44 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Get the current content type
         """
-        return await self._get_attribute("content_type", ACKs.picture_ack, ContentTypes)
+        return await self._get_attribute("content_type")
 
     async def get_content_type_trans(self) -> str:
         """
         Get the current auto content transition type
         """
-        return await self._get_attribute(
-            "content_type_trans", ACKs.picture_ack, ContentTypeTrans
-        )
+        return await self._get_attribute("content_type_trans")
 
     async def get_hdr_processing(self) -> str:
         """
         Get the current hdr processing setting like frame by frame. Will fail if not in HDR mode!
         """
-        return await self._get_attribute(
-            "hdr_processing", ACKs.picture_ack, HdrProcessing
-        )
+        return await self._get_attribute("hdr_processing")
 
     async def get_hdr_level(self) -> str:
         """
         Get the current hdr quantization level
         """
-        return await self._get_attribute("hdr_level", ACKs.picture_ack, HdrLevel)
+        return await self._get_attribute("hdr_level")
 
     async def get_hdr_data(self) -> str:
         """
         Get the current hdr mode -> sdr, hdr10_plus, etc
         """
-        return await self._get_attribute("hdr_data", ACKs.info_ack, HdrData)
+        return await self._get_attribute("hdr_data")
 
     async def get_lamp_power(self) -> str:
         """
         Get the current lamp power non-NZ only
         """
-        return await self._get_attribute("lamp_power", ACKs.picture_ack, LampPowerModes)
+        return await self._get_attribute("lamp_power")
 
     async def get_lamp_time(self) -> int:
         """
         Get the current lamp time
         """
         try:
-            state, _ = await self.commander.do_reference_op("lamp_time", ACKs.info_ack)
+            state  = await self.commander.do_reference_op("lamp_time", ACKs.info_ack)
             return int(state.replace(ACKs.info_ack.value, b""), 16)
         except ConnectionClosedError:
             self.logger.debug("Connection is closed for _get_attribute")
@@ -465,48 +455,38 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Get the current laser power NZ only
         """
-        return await self._get_attribute(
-            "laser_power", ACKs.picture_ack, LaserPowerModes
-        )
+        return await self._get_attribute("laser_power")
 
     async def get_theater_optimizer_state(self) -> str:
         """
         If theater optimizer is on/off Will fail if not in HDR mode!
         """
-        return await self._get_attribute(
-            "theater_optimizer", ACKs.picture_ack, TheaterOptimizer
-        )
+        return await self._get_attribute("theater_optimizer")
 
     async def get_aspect_ratio(self) -> str:
         """
         Return aspect ratio
         """
-        return await self._get_attribute(
-            "aspect_ratio", ACKs.hdmi_ack, AspectRatioModes
-        )
+        return await self._get_attribute("aspect_ratio")
 
     async def get_anamorphic(self) -> str:
         """
         Return anamorphic mode
         """
-        return await self._get_attribute("anamorphic", ACKs.lens_ack, AnamorphicModes)
+        return await self._get_attribute("anamorphic")
 
     async def get_source_status(self) -> bool:
         """
         Return source status True if it has a signal
         """
-        res = await self._get_attribute(
-            "source_status", ACKs.source_ack, SourceStatuses
-        )
+        res = await self._get_attribute("source_status")
         return res == "signal"
 
     async def get_source_display(self) -> str:
         """
         Return source display resolution like 4k_4096p60
         """
-        res = await self._get_attribute(
-            "source_disaply", ACKs.info_ack, ResolutionModes
-        )
+        res = await self._get_attribute("source_disaply")
 
         return res.replace("r_", "")
 

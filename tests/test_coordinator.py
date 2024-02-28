@@ -95,6 +95,7 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
             InstallationModes.__members__,
             f"Unexpected install mode: {install_mode}",
         )
+        print(install_mode)
         # Testing input mode
 
         input_mode = await self.coordinator.get_input_mode()

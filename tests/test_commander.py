@@ -67,8 +67,9 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
     async def test_send_command(self):
         """Test sending a command"""
         res = await self.coordinator.commander.send_command("laser_value", b"?")
+        print(res)
         assert res, "failed to send command"
-        
+
     async def turn_off(self):
         """unskip to turn off pj after tests"""
         self.skipTest("not turning off")
