@@ -122,6 +122,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             logger,
             self.reader,
             self.writer,
+            self.lock,
         )
 
     async def _handshake(self) -> bool:
@@ -132,8 +133,8 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         else:
             pj_req = PJ_REQ
 
-        try:
-            async with self.lock:
+        async with self.lock:
+            try:
                 msg_pjok = await self.reader.read(len(PJ_OK))
                 self.logger.debug(msg_pjok)
                 if msg_pjok != PJ_OK:
@@ -149,12 +150,12 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                     self.logger.error(result)
                     return False
                 self.logger.debug("Handshake successful")
-        except asyncio.TimeoutError:
-            return False
+            except asyncio.TimeoutError:
+                return False
 
-        self.model_family = await self._get_modelfamily()
-        self.logger.debug("Model code is %s", self.model_family)
-        return True
+            self.model_family = await self._get_modelfamily()
+            self.logger.debug("Model code is %s", self.model_family)
+            return True
 
     async def _get_modelfamily(self) -> str:
         """Get the model family asynchronously"""
@@ -381,7 +382,8 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         # returns something like 0210PJ as bytes
         # b'@\x89\x01IF0300PJ\n'
         ver: str = (
-            self.commander.replace_headers(state).replace(ACKs.info_ack.value, b"")
+            self.commander.replace_headers(state)
+            .replace(ACKs.info_ack.value, b"")
             .replace(b"PJ", b"")
             .decode()
             # remove leading 0
@@ -395,7 +397,10 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         Get the current software version FW 3.0+ only
         """
         state = await self._get_attribute("laser_value", replace=False)
-        raw = int(self.commander.replace_headers(state).replace(ACKs.picture_ack.value, b""), 16)
+        raw = int(
+            self.commander.replace_headers(state).replace(ACKs.picture_ack.value, b""),
+            16,
+        )
         # jvc returns a weird scale
         return math.floor(((raw - 109) / 1.1) + 0.5)
 
@@ -440,7 +445,9 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         Get the current lamp time
         """
         state = await self._get_attribute("lamp_time", replace=False)
-        return int(self.commander.replace_headers(state).replace(ACKs.info_ack.value, b""), 16)
+        return int(
+            self.commander.replace_headers(state).replace(ACKs.info_ack.value, b""), 16
+        )
 
     async def get_laser_power(self) -> str:
         """

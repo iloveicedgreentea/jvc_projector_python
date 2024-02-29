@@ -48,6 +48,7 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
         is_on = await self.coordinator.is_on()
         # turn on if not already
         if not is_on:
+            self.fail("PJ is off, turn on to run tests")
             msg = await self.coordinator.power_on()
             print(msg)
 
@@ -239,10 +240,10 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
         if res:
             _, res = await self.coordinator.exec_command(["menu, menu"])
 
-    async def turn_off(self):
+    async def test_turn_off(self):
         """unskip to turn off pj after tests"""
-        self.skipTest("not turning off")
-        _, res = await self.coordinator.exec_command("power, off")
+        # self.skipTest("not turning off")
+        _, res = await self.coordinator.exec_command(["power, off"])
         assert res, "failed to turn off"
 
 
