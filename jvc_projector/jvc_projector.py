@@ -106,6 +106,14 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         self.logger = logger
         self.reader: asyncio.StreamReader = None
         self.writer: asyncio.StreamWriter = None
+
+        self.model_family = ""
+        self.connection_open = False
+        # attribute mapping
+        self.attributes = JVCAttributes()
+        self.lock = asyncio.Lock()
+        self.cmd_queue = asyncio.Queue()
+
         self.commander = JVCCommander(
             options.host,
             options.port,
@@ -115,11 +123,6 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             self.reader,
             self.writer,
         )
-        self.model_family = ""
-        self.connection_open = False
-        # attribute mapping
-        self.attributes = JVCAttributes()
-        self.lock = asyncio.Lock()
 
     async def _handshake(self) -> bool:
         """Perform an async 3-way handshake with the projector"""
@@ -160,7 +163,8 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         )
         # TODO: error handling
         model_res = self.commander.replace_headers(res).decode()
-        self.logger.debug(model_res)
+        self.logger.debug("Model result is %s", model_res)
+
         return model_map.get(model_res[-4:], "Unsupported")
 
     async def open_connection(self) -> bool:
@@ -201,28 +205,28 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                 self.logger.debug(err)
                 await asyncio.sleep(2)
 
-    # TODO: need to infer the command type somehow. Maybe get_attribute sends this value
-    # TODO: someone needs to catch exceptions like ConnectionClosedError
     async def exec_command(
         self, command: Union[list[str], str], command_type: bytes = b"!"
-    ) -> tuple[str, bool]:
+    ) -> str:
         """
         Wrapper for commander.send_command() externally to prevent circular imports
+
+        Callers should catch ConnectionClosedError
+
         command: a str of the command and value, separated by a comma ("power,on").
             or a list of commands
         This is to make home assistant UI use easier
+
+
+
         command_type: which operation, like ! or ? (default = !)
+
         Returns
-            (
-                ack or error message: str,
-                success flag: bool
-            )
+            value: str (to be cast into other types),
         """
         self.logger.debug(
             "exec_command Executing command: %s - %s", command, command_type
         )
-        # TODO:should this translate list command to the string value?
-        # TODO: use the add to queue command exec_command should not care about return types or anything
 
         return await self.commander.send_command(command, command_type)
 
@@ -284,7 +288,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         return await self.exec_command("power,off")
 
-    async def _get_attribute(self, command: str) -> str:
+    async def _get_attribute(self, command: str, replace: bool = True) -> str:
         """
         Generic function to get the current attribute asynchronously
         """
@@ -293,11 +297,14 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         ack = cmd_tup[2]
         try:
             state = await self.commander.do_reference_op(command, ack)
-            # remove the returned headers
-            r = self.commander.replace_headers(state)
-            self.logger.debug("Attribute %s is %s", command, r)
-            # look up the enum value like b"1" -> on in PowerModes
-            return cmd_enum(r.replace(ack.value, b"")).name
+            if replace:
+                # remove the returned headers
+                r = self.commander.replace_headers(state)
+                self.logger.debug("Attribute %s is %s", command, r)
+                # look up the enum value like b"1" -> on in PowerModes
+                return cmd_enum(r.replace(ack.value, b"")).name
+            else:
+                return state
         except ValueError as err:
             self.logger.error("Attribute not found - %s", err)
             raise
@@ -307,13 +314,14 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         except ConnectionClosedError:
             self.logger.debug("Connection is closed for _get_attribute")
             # open connection and try again
+            # TODO: handle this better
             return "Connection closed"
 
     async def get_low_latency_state(self) -> str:
         """
         Get the current state of LL
         """
-        return await self._get_attribute("low_latency")
+        return await self._get_attribute("low_latency") == LowLatencyModes.on.name
 
     async def get_picture_mode(self) -> str:
         """
@@ -368,40 +376,26 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Get the current software version
         """
-        try:
-            state = await self.commander.do_reference_op(
-                "get_software_version", ACKs.info_ack
-            )
-            # returns something like 0210PJ as bytes
-            ver: str = (
-                state.replace(ACKs.info_ack.value, b"")
-                .replace(b"PJ", b"")
-                .decode()
-                # remove leading 0
-                .lstrip("0")
-            )
-            # add a dot to the version
-            return float(f"{ver[:1]}.{ver[1:]}")
-        except ConnectionClosedError:
-            self.logger.debug("Connection is closed for _get_attribute")
-            # open connection and try again
-            return 0.0
+        state = await self._get_attribute("get_software_version", replace=False)
+        # returns something like 0210PJ as bytes
+        ver: str = (
+            state.replace(ACKs.info_ack.value, b"")
+            .replace(b"PJ", b"")
+            .decode()
+            # remove leading 0
+            .lstrip("0")
+        )
+        # add a dot to the version
+        return float(f"{ver[:1]}.{ver[1:]}")
 
     async def get_laser_value(self) -> int:
         """
         Get the current software version FW 3.0+ only
         """
-        try:
-            state = await self.commander.do_reference_op(
-                "laser_value", ACKs.picture_ack
-            )
-            raw = int(state.replace(ACKs.picture_ack.value, b""), 16)
-            # jvc returns a weird scale
-            return math.floor(((raw - 109) / 1.1) + 0.5)
-        except ConnectionClosedError:
-            self.logger.debug("Connection is closed for _get_attribute")
-            # open connection and try again
-            return "Connection closed"
+        state = await self._get_attribute("laser_value", replace=False)
+        raw = int(state.replace(ACKs.picture_ack.value, b""), 16)
+        # jvc returns a weird scale
+        return math.floor(((raw - 109) / 1.1) + 0.5)
 
     async def get_content_type(self) -> str:
         """
@@ -443,13 +437,8 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Get the current lamp time
         """
-        try:
-            state  = await self.commander.do_reference_op("lamp_time", ACKs.info_ack)
-            return int(state.replace(ACKs.info_ack.value, b""), 16)
-        except ConnectionClosedError:
-            self.logger.debug("Connection is closed for _get_attribute")
-            # open connection and try again
-            return 0
+        state = await self._get_attribute("lamp_time", replace=False)
+        return int(state.replace(ACKs.info_ack.value, b""), 16)
 
     async def get_laser_power(self) -> str:
         """

@@ -78,6 +78,9 @@ class PowerModes(Enum):
 
     off = b"0"
     on = b"1"
+    cooling = b"2"
+    warming = b"3"
+    emergency = b"4"
 
 
 class PowerStates(Enum):

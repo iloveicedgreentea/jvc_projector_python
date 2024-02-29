@@ -2,6 +2,7 @@ import asyncio
 import logging
 import socket
 from typing import Union
+import math
 
 from jvc_projector.commands import ACKs, Commands, Footer, Header
 from jvc_projector.error_classes import (
@@ -75,9 +76,7 @@ class JVCCommander:
         command_type: bytes - ! or ?
 
         Returns:
-            (
-                value: str (to be cast into other types)
-            )
+            value: str (to be cast into other types)
         """
         cmd, ack = self.construct_command(command, command_type)
         # cmd_tup = Commands[command].value
@@ -255,7 +254,10 @@ class JVCCommander:
         except ValueError:
             # support single commands like get_model
             command: bytes = (
-                command_type + Header.pj_unit.value + Commands[raw_command].value[0] + Footer.close.value
+                command_type
+                + Header.pj_unit.value
+                + Commands[raw_command].value[0]
+                + Footer.close.value
             )
             return command, Commands[raw_command].value[2].value
 
@@ -266,8 +268,24 @@ class JVCCommander:
 
         # construct the command with nested Enums
         command_name, val, ack = Commands[command].value
-        command_base: bytes = command_name + val[value.lstrip(" ")].value
+        try:
+            command_base: bytes = command_name + val[value.lstrip(" ")].value
+        # assume its int
+        except TypeError:
+            if val is int:
+                value = value.strip()
+                if command == "laser_value":
+                    v = math.floor(1.1 * int(value) + 0.5)  + 109 # 109 is the offset for some reason 109 = 0
+                # Convert decimal value to a 4-character hexadecimal string
+                hex_value = format(v, '04x')
+                
+                # Convert each hexadecimal character to its ASCII representation
+                ascii_representation = ''.join(f'{ord(char):02x}' for char in hex_value).upper()
+                
+                # Convert the ASCII representation to bytes
+                command_base: bytes = command_name + bytes.fromhex(ascii_representation)
         # Construct command based on required values
+        self.logger.debug("command_base: %s", command_base)
         command: bytes = (
             command_type + Header.pj_unit.value + command_base + Footer.close.value
         )
@@ -282,7 +300,6 @@ class JVCCommander:
             command_type=Header.reference.value,
         )
         self.logger.debug("do_reference_op msg: %s", msg)
-
 
         msg = self.replace_headers(msg)
 
