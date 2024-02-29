@@ -60,11 +60,7 @@ class JVCCommander:
         pass
 
     # TODO: must catch broken pipe
-    # TODO: something else must decode the commands from HA like [menu, menu]
     # TODO: support remote
-    # _, value = send_command[0].split(",")
-    #                     return await self.emulate_remote(value)
-    # TODO: run this in a loop and send commands from a queue
     async def send_command(self, command: str, command_type: bytes) -> str:
         """
         Sends a command with a flag to expect an ack.
@@ -79,35 +75,13 @@ class JVCCommander:
             value: str (to be cast into other types)
         """
         cmd, ack = self.construct_command(command, command_type)
-        # cmd_tup = Commands[command].value
-        # cmd = cmd_tup[0]  # laser_value
-        # cmd_enum = cmd_tup[1]  # LaserDimModes
-        # ack = cmd_tup[2].value  # ACKs.whatever
 
         # Check commands
         self.logger.debug("command: %s", cmd)
-        # make header based on command type - ensure we only get expected value
-        # header = (
-        #     Header.reference.value
-        #     if command_type == Header.reference.value
-        #     else Header.operation.value
-        # )
-        # final_cmd: bytes = (
-        #     header
-        #     + Header.pj_unit.value
-        #     + Commands[command].value[0]
-        #     + Footer.close.value
-        # )
+
         try:
             return await self._do_command(cmd, ack, command_type)
-            # try:
-            #     cons_command, ack = self._construct_command(send_command, command_type)
-            # except TypeError:
-            #     cons_command = send_command
 
-            # if not ack:
-            #     return cons_command, ack
-            # return await self._do_command(cons_command, ack.value, command_type)
         # raise connectionclosed error to be handled by callers
         except (
             # TODO: handle ConnectionClosedError outside this function, in a loop
@@ -204,40 +178,6 @@ class JVCCommander:
             self.logger.debug(err)
             raise ConnectionRefusedError(error) from err
 
-    # async def _check_received_msg(
-    #     self, received_ack: bytes, ack_value: bytes, command_type: bytes
-    # ) -> bytes:
-    #     self.logger.debug(
-    #         "received msg is: %s and ack value is %s and type %s",
-    #         received_ack,
-    #         ack_value,
-    #         command_type,
-    #     )
-    #     # get the ack for operation
-    #     if command_type == Header.operation.value:
-    #         # operations dont have return values beyond this
-    #         # read the rest of the msg to clear the buffer e.g PW/n
-    #         message = await self.reader.read(1000)
-    #         self.logger.debug("received operation message from PJ: %s", message)
-    #         return message
-
-    #     # if we got what we expect and this is a reference,
-    #     # receive the data we requested
-    #     if command_type == Header.reference.value:
-    #         message = await self.reader.read(1000)
-    #         self.logger.debug("received message from PJ: %s", message)
-
-    #         return message
-
-    #     self.logger.error(
-    #         "Received ack: %s != expected ack: %s",
-    #         received_ack,
-    #         ack_value,
-    #     )
-
-    #     # return blank will force it to retry
-    #     return b""
-
     # TODO: use this to construct commands from a list that is a str like ["menu,menu"]
     def construct_command(
         self, raw_command: str, command_type: bytes
@@ -275,13 +215,17 @@ class JVCCommander:
             if val is int:
                 value = value.strip()
                 if command == "laser_value":
-                    v = math.floor(1.1 * int(value) + 0.5)  + 109 # 109 is the offset for some reason 109 = 0
+                    v = (
+                        math.floor(1.1 * int(value) + 0.5) + 109
+                    )  # 109 is the offset for some reason 109 = 0
                 # Convert decimal value to a 4-character hexadecimal string
-                hex_value = format(v, '04x')
-                
+                hex_value = format(v, "04x")
+
                 # Convert each hexadecimal character to its ASCII representation
-                ascii_representation = ''.join(f'{ord(char):02x}' for char in hex_value).upper()
-                
+                ascii_representation = "".join(
+                    f"{ord(char):02x}" for char in hex_value
+                ).upper()
+
                 # Convert the ASCII representation to bytes
                 command_base: bytes = command_name + bytes.fromhex(ascii_representation)
         # Construct command based on required values
