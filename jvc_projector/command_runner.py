@@ -212,14 +212,17 @@ class JVCCommander:
             command_base: bytes = command_name + val[value.lstrip(" ")].value
         # assume its int
         except TypeError:
+            # if the Enum is int instead of an Enum
             if val is int:
-                value = value.strip()
+                # remove spaces and cast as int
+                value = int(value.strip())
+                # laser value in has stupid math
                 if command == "laser_value":
-                    v = (
-                        math.floor(1.1 * int(value) + 0.5) + 109
+                    value = (
+                        math.floor(1.1 * value + 0.5) + 109
                     )  # 109 is the offset for some reason 109 = 0
                 # Convert decimal value to a 4-character hexadecimal string
-                hex_value = format(v, "04x")
+                hex_value = format(value, "04x")
 
                 # Convert each hexadecimal character to its ASCII representation
                 ascii_representation = "".join(
@@ -235,16 +238,3 @@ class JVCCommander:
         )
 
         return command, ack.value
-
-    async def do_reference_op(self, command: str, ack: ACKs) -> str:
-        """Make a reference call"""
-        # Ensure the command value is retrieved correctly as bytes
-        msg = await self.send_command(
-            command,
-            command_type=Header.reference.value,
-        )
-        self.logger.debug("do_reference_op msg: %s", msg)
-
-        msg = self.replace_headers(msg)
-
-        return msg

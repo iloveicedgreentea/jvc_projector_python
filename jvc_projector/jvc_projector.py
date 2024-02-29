@@ -296,7 +296,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         cmd_enum = cmd_tup[1]
         ack = cmd_tup[2]
         try:
-            state = await self.commander.do_reference_op(command, ack)
+            state = await self.exec_command(command, Header.reference.value)
             if replace:
                 # remove the returned headers
                 r = self.commander.replace_headers(state)
@@ -377,9 +377,11 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         Get the current software version
         """
         state = await self._get_attribute("get_software_version", replace=False)
+        self.logger.debug("Software version is %s", state)
         # returns something like 0210PJ as bytes
+        # b'@\x89\x01IF0300PJ\n'
         ver: str = (
-            state.replace(ACKs.info_ack.value, b"")
+            self.commander.replace_headers(state).replace(ACKs.info_ack.value, b"")
             .replace(b"PJ", b"")
             .decode()
             # remove leading 0
@@ -393,7 +395,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         Get the current software version FW 3.0+ only
         """
         state = await self._get_attribute("laser_value", replace=False)
-        raw = int(state.replace(ACKs.picture_ack.value, b""), 16)
+        raw = int(self.commander.replace_headers(state).replace(ACKs.picture_ack.value, b""), 16)
         # jvc returns a weird scale
         return math.floor(((raw - 109) / 1.1) + 0.5)
 
@@ -438,7 +440,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         Get the current lamp time
         """
         state = await self._get_attribute("lamp_time", replace=False)
-        return int(state.replace(ACKs.info_ack.value, b""), 16)
+        return int(self.commander.replace_headers(state).replace(ACKs.info_ack.value, b""), 16)
 
     async def get_laser_power(self) -> str:
         """
