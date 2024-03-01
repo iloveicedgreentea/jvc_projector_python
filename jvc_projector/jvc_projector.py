@@ -112,7 +112,6 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         # attribute mapping
         self.attributes = JVCAttributes()
         self.lock = asyncio.Lock()
-        self.cmd_queue = asyncio.Queue()
 
         self.commander = JVCCommander(
             options.host,
