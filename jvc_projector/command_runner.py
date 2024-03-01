@@ -120,7 +120,7 @@ class JVCCommander:
         ack: bytes,
         command_type: bytes,
     ) -> tuple[Union[str, bytes]]:
-        with await self.lock:
+        async with self.lock:
             self.logger.debug("final_cmd: %s with ack %s", final_cmd, ack)
             # ensure this doesnt run with dead client
             if self.writer is None:
