@@ -131,41 +131,57 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             self.logger.debug("connecting with password hunter2")
         else:
             pj_req = PJ_REQ
-
-        async with self.lock:
-            try:
+        try:
+            async with self.lock:
+                self.logger.debug("Sending PJ_REQ")
                 msg_pjok = await self.reader.read(len(PJ_OK))
-                self.logger.debug(msg_pjok)
-                if msg_pjok != PJ_OK:
-                    result = f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
-                    self.logger.error(result)
-                    return False
-
+            if msg_pjok != PJ_OK:
+                result = (
+                    f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
+                )
+                self.logger.error(result)
+                return False
+            self.logger.debug("PJ_OK received")
+            async with self.lock:
                 self.writer.write(pj_req)
                 await self.writer.drain()
                 msg_pjack = await self.reader.read(len(PJ_ACK))
-                if msg_pjack != PJ_ACK:
-                    result = f"Exception with PJACK: {msg_pjack}"
-                    self.logger.error(result)
-                    return False
-                self.logger.debug("Handshake successful")
-            except asyncio.TimeoutError:
+            self.logger.debug("PJ_ACK received")
+            if msg_pjack != PJ_ACK:
+                result = f"Exception with PJACK: {msg_pjack}"
+                self.logger.error(result)
                 return False
+            self.logger.debug("Handshake successful")
+        except asyncio.TimeoutError:
+            return False
 
-            self.model_family = await self._get_modelfamily()
-            self.logger.debug("Model code is %s", self.model_family)
-            return True
+        self.model_family = await self._get_modelfamily()
+        self.logger.debug("Model code is %s", self.model_family)
+        return True
 
     async def _get_modelfamily(self) -> str:
         """Get the model family asynchronously"""
-        res = await self.commander.send_command(
-            command="get_model", command_type=Header.reference.value
-        )
-        # TODO: error handling
-        model_res = self.commander.replace_headers(res).decode()
-        self.logger.debug("Model result is %s", model_res)
 
-        return model_map.get(model_res[-4:], "Unsupported")
+        retry_count = 0
+        while retry_count < 3:
+            try:
+                res = await self.commander.send_command(
+                    command="get_model", command_type=Header.reference.value
+                )
+                model_res = self.commander.replace_headers(res).decode()
+                self.logger.debug("Model result is %s", model_res)
+
+                return model_map.get(model_res[-4:], "Unsupported")
+            except ConnectionClosedError:
+                self.logger.error(
+                    "Connection closed. Opening new connection. Retry your command"
+                )
+                # open connection and try again
+                await self.open_connection()
+                await asyncio.sleep(1)
+                retry_count += 1
+                continue
+        return ""
 
     async def open_connection(self) -> bool:
         """Open a connection to the projector asynchronously"""
@@ -227,8 +243,16 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         self.logger.debug(
             "exec_command Executing command: %s - %s", command, command_type
         )
-
-        return await self.commander.send_command(command, command_type)
+        try:
+            return await self.commander.send_command(command, command_type)
+        except ConnectionClosedError:
+            self.logger.error(
+                "Connection closed. Opening new connection. Retry your command"
+            )
+            # open connection and try again
+            await self.open_connection()
+            await asyncio.sleep(1)
+            return ""
 
     async def close_connection(self):
         """Close the projector connection asynchronously"""
