@@ -197,8 +197,9 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                     self.options.port,
                 )
                 try:
-                    self.reader, self.writer = await asyncio.open_connection(
-                        self.options.host, self.options.port, timeout=10
+                    self.reader, self.writer = await asyncio.wait_for(
+                        asyncio.open_connection(self.options.host, self.options.port),
+                        timeout=10,
                     )
                 except asyncio.TimeoutError:
                     self.logger.warning(
