@@ -254,7 +254,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         try:
             return await self.commander.send_command(command, command_type)
         except ConnectionClosedError:
-            self.logger.error(
+            self.logger.debug(
                 "Connection closed. Opening new connection. Retry your command"
             )
             # open connection and try again
