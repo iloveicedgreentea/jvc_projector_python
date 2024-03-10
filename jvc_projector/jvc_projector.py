@@ -196,9 +196,16 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                     self.options.host,
                     self.options.port,
                 )
-                self.reader, self.writer = await asyncio.open_connection(
-                    self.options.host, self.options.port
-                )
+                try:
+                    self.reader, self.writer = await asyncio.open_connection(
+                        self.options.host, self.options.port, timeout=10
+                    )
+                except asyncio.TimeoutError:
+                    self.logger.warning(
+                        "open connection timed out, retrying in 2 seconds"
+                    )
+                    await asyncio.sleep(2)
+                    continue
                 # Set the reader and writer for the commander
                 self.commander.reader = self.reader
                 self.commander.writer = self.writer
