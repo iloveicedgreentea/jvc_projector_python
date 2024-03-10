@@ -173,8 +173,8 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
 
                 return model_map.get(model_res[-4:], "Unsupported")
             except ConnectionClosedError:
-                self.logger.error(
-                    "Connection closed. Opening new connection. Retry your command"
+                self.logger.debug(
+                    "Connection closed. Opening new connection"
                 )
                 # open connection and try again
                 await self.open_connection()

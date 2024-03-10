@@ -121,7 +121,7 @@ class JVCCommander:
         self.logger.debug("final_cmd: %s with ack %s", final_cmd, ack)
         # ensure this doesnt run with dead client
         if self.writer is None:
-            self.logger.warning("Writer is closed")
+            self.logger.debug("Writer is closed")
             raise ConnectionClosedError("writer is none")
 
         self.logger.debug("do_command sending command: %s", final_cmd)
