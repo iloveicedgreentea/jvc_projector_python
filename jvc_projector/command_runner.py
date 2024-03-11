@@ -104,7 +104,6 @@ class JVCCommander:
 
         return await self.send_command(
             cmd,
-            ack=ACKs.menu_ack,
             command_type=Header.operation.value,
         )
 
@@ -129,7 +128,9 @@ class JVCCommander:
                 await self.writer.drain()
             self.logger.debug("released command lock")
         except BrokenPipeError as err:
-            self.logger.error("BrokenPipeError in _do_command restarting connection: %s", err)
+            self.logger.error(
+                "BrokenPipeError in _do_command restarting connection: %s", err
+            )
             # Attempt to reconnect or handle the broken pipe scenario
             raise ConnectionClosedError("Broken pipe") from err
         except ConnectionResetError as err:

@@ -13,37 +13,16 @@ from jvc_projector.commands import (
     PJ_ACK,
     PJ_OK,
     PJ_REQ,
-    ResolutionModes,
     ACKs,
-    AspectRatioModes,
-    ColorSpaceModes,
     Commands,
-    ContentTypes,
-    ContentTypeTrans,
     Enum,
-    EshiftModes,
     Footer,
-    HdrData,
-    HdrLevel,
-    HdrProcessing,
     Header,
-    InputLevel,
-    InputModes,
-    InstallationModes,
-    LampPowerModes,
-    LaserDimModes,
-    LaserPowerModes,
     LowLatencyModes,
-    MaskModes,
-    PictureModes,
-    AnamorphicModes,
     PowerStates,
-    SourceStatuses,
-    TheaterOptimizer,
     model_map,
 )
 from jvc_projector.error_classes import (
-    BlankMessageError,
     CommandTimeoutError,
     ConnectionClosedError,
 )
@@ -283,32 +262,6 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             self.commander.writer = self.writer
             self.connection_open = False
             self.attributes.connection_active = False
-
-    async def info(self) -> tuple[str, bool]:
-        """
-        Bring up the Info screen
-        """
-        cmd = (
-            Header.operation.value
-            + Header.pj_unit.value
-            + Commands.info.value
-            + Footer.close.value
-        )
-        retries = 0
-        while retries < 3:
-            try:
-                return await self.commander.send_command(
-                    cmd,
-                    ack=ACKs.menu_ack,
-                    command_type=Header.operation.value,
-                )
-            except ConnectionClosedError:
-                self.logger.error("Connection closed")
-                # open connection and try again
-                await self.open_connection()
-                await asyncio.sleep(1)
-                retries += 1
-                continue
 
     async def power_on(
         self,
