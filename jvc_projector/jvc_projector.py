@@ -335,7 +335,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         try:
             state = await self.exec_command(command, Header.reference.value)
             if not state:
-                self.logger.error("%s Command failed", command)
+                self.logger.debug("%s Command failed", command)
                 return ""
             if replace:
                 # remove the returned headers

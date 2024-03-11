@@ -129,11 +129,11 @@ class JVCCommander:
                 await self.writer.drain()
             self.logger.debug("released command lock")
         except BrokenPipeError as err:
-            self.logger.error("BrokenPipeError in _do_command: %s", err)
+            self.logger.error("BrokenPipeError in _do_command restarting connection: %s", err)
             # Attempt to reconnect or handle the broken pipe scenario
             raise ConnectionClosedError("Broken pipe") from err
         except ConnectionResetError as err:
-            self.logger.error("ConnectionResetError in _do_command: %s", err)
+            self.logger.debug("ConnectionResetError in _do_command: %s", err)
             # Handle connection reset specifically, if different from broken pipe
             raise ConnectionClosedError("Connection reset") from err
         except ConnectionError as err:
