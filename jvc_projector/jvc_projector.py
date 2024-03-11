@@ -162,26 +162,16 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
     async def _get_modelfamily(self) -> str:
         """Get the model family asynchronously"""
 
-        retry_count = 0
-        while retry_count < 3:
-            try:
-                res = await self.commander.send_command(
-                    command="get_model", command_type=Header.reference.value
-                )
-                model_res = self.commander.replace_headers(res).decode()
-                self.logger.debug("Model result is %s", model_res)
+        res = await self.exec_command(
+            command="get_model", command_type=Header.reference.value
+        )
+        if not res:
+            self.logger.error("Failed to get model family")
+            return "Unsupported"
+        model_res = self.commander.replace_headers(res).decode()
+        self.logger.debug("Model result is %s", model_res)
 
-                return model_map.get(model_res[-4:], "Unsupported")
-            except ConnectionClosedError:
-                self.logger.debug(
-                    "Connection closed. Opening new connection"
-                )
-                # open connection and try again
-                await self.open_connection()
-                await asyncio.sleep(1)
-                retry_count += 1
-                continue
-        return ""
+        return model_map.get(model_res[-4:], "Unsupported")
 
     async def open_connection(self) -> bool:
         """Open a connection to the projector asynchronously"""
@@ -231,7 +221,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
 
     async def exec_command(
         self, command: Union[list[str], str], command_type: bytes = b"!"
-    ) -> str:
+    ) -> str | None:
         """
         Wrapper for commander.send_command() externally to prevent circular imports
 
@@ -251,16 +241,30 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         self.logger.debug(
             "exec_command Executing command: %s - %s", command, command_type
         )
-        try:
-            return await self.commander.send_command(command, command_type)
-        except ConnectionClosedError:
-            self.logger.debug(
-                "Connection closed. Opening new connection. Retry your command"
-            )
-            # open connection and try again
-            await self.open_connection()
-            await asyncio.sleep(1)
-            return ""
+        retries = 0
+        while retries < 3:
+            try:
+                res = await self.commander.send_command(command, command_type)
+                if not res:
+                    self.logger.debug("Command failed. Retrying")
+                    retries += 1
+                    continue
+                return res
+            except (
+                ConnectionClosedError,
+                CommandTimeoutError,
+                ConnectionRefusedError,
+                BrokenPipeError,
+            ):
+                self.logger.debug(
+                    "Connection closed. Opening new connection. Retry your command"
+                )
+                # open connection and try again
+                await self.open_connection()
+                await asyncio.sleep(1)
+                continue
+
+        return None
 
     async def close_connection(self):
         """Close the projector connection asynchronously"""
@@ -327,11 +331,18 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         cmd_tup = Commands[command].value
         cmd_enum = cmd_tup[1]
         ack = cmd_tup[2]
+        self.logger.debug("Getting attribute %s with tuple %s", command, cmd_tup)
         try:
             state = await self.exec_command(command, Header.reference.value)
+            if not state:
+                self.logger.error("%s Command failed", command)
+                return ""
             if replace:
                 # remove the returned headers
                 r = self.commander.replace_headers(state)
+                if not isinstance(r, bytes):
+                    self.logger.error("Attribute %s is not bytes", command)
+                    return ""
                 self.logger.debug("Attribute %s is %s", command, r)
                 # look up the enum value like b"1" -> on in PowerModes
                 return cmd_enum(r.replace(ack.value, b"")).name
@@ -343,11 +354,6 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         except AttributeError as err:
             self.logger.error("tried to access name on non-enum: %s", err)
             return ""
-        except ConnectionClosedError:
-            self.logger.debug("Connection is closed for _get_attribute")
-            # open connection and try again
-            # TODO: handle this better
-            return "Connection closed"
 
     async def get_low_latency_state(self) -> str:
         """

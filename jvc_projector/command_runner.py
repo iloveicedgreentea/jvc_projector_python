@@ -84,13 +84,9 @@ class JVCCommander:
             return await self._do_command(cmd, ack, command_type)
 
         # raise connectionclosed error to be handled by callers
-        except (
-            # TODO: handle ConnectionClosedError outside this function, in a loop
-            CommandTimeoutError,
-            BlankMessageError,
-            ConnectionRefusedError,
-        ) as err:
-            return str(err), False
+        except BlankMessageError as err:
+            self.logger.debug("error in send_command: %s", err)
+            return ""
 
     async def emulate_remote(self, remote_code: str) -> tuple[str, bool]:
         """
@@ -161,7 +157,7 @@ class JVCCommander:
 
             # read the actual message, if any
             if msg == b"":  # if we got a blank response
-                self.logger.error("Got a blank response")
+                self.logger.debug("Got a blank response")
                 raise BlankMessageError("Got a blank response")
             if command_type == Header.operation.value:
                 return msg, True
