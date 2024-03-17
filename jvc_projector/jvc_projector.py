@@ -192,10 +192,11 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                 return True
             except asyncio.TimeoutError:
                 self.logger.warning("Connection timed out, retrying in 2 seconds")
+                await self.close_connection()
                 await asyncio.sleep(2)
             except OSError as err:
-                self.logger.warning("Connecting failed, retrying in 2 seconds")
-                self.logger.debug(err)
+                self.logger.warning("Connecting failed, retrying in 2 seconds: %s", err)
+                await self.close_connection()
                 await asyncio.sleep(2)
 
     async def exec_command(
