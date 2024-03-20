@@ -7,7 +7,6 @@ from jvc_projector.commands import (
     ColorSpaceModes,
     ContentTypes,
     ContentTypeTrans,
-    EshiftModes,
     InputLevel,
     AnamorphicModes,
     InputModes,
@@ -15,11 +14,8 @@ from jvc_projector.commands import (
     LampPowerModes,
     LaserDimModes,
     LaserPowerModes,
-    ResolutionModes,
-    LowLatencyModes,
     MaskModes,
     PictureModes,
-    SourceStatuses,
 )
 
 TEST_IP = "192.168.88.23"
@@ -48,8 +44,9 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
         is_on = await self.coordinator.is_on()
         # turn on if not already
         if not is_on:
-            _, res = await self.coordinator.power_on()
-            assert res is True
+            self.fail("PJ is off, turn on to run tests")
+            msg = await self.coordinator.power_on()
+            print(msg)
 
         # wait for projector to turn on
         timeout = 120  # units technically, not really seconds but who cares
@@ -70,20 +67,18 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
         # check return value against eunm __members__
         low_latency_state = await self.coordinator.get_low_latency_state()
         self.assertIn(
-            low_latency_state,
-            LowLatencyModes.__members__,
-            f"Unexpected low latency state: {low_latency_state}",
+            low_latency_state, [False, True], "Low latency state not on or off"
         )
         _, res = await self.coordinator.exec_command(["laser_power, low"])
         self.assertTrue(res, "failed to set laser power to low")
-        
+
         # test getting resolution
         res = await self.coordinator.get_source_display()
         self.assertIn(res, ["4K_4096p24", "NoSignal"], "Source display not as expected")
 
         res = await self.coordinator.get_anamorphic()
         self.assertIn(res, AnamorphicModes.__members__, "Anamorphic not as expected")
-        
+
         picture_mode = await self.coordinator.get_picture_mode()
         self.assertIn(
             picture_mode, PictureModes.__members__, "Picture mode not as expected."
@@ -95,6 +90,7 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
             InstallationModes.__members__,
             f"Unexpected install mode: {install_mode}",
         )
+        print(install_mode)
         # Testing input mode
 
         input_mode = await self.coordinator.get_input_mode()
@@ -142,15 +138,19 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
 
         # Testing software version
         software_version = await self.coordinator.get_software_version()
-        self.assertIsInstance(software_version, float, "Software version is not a float")
-        self.assertGreater(software_version, 0, "Software version is not greater than 0")
+        self.assertIsInstance(
+            software_version, float, "Software version is not a float"
+        )
+        self.assertGreater(
+            software_version, 0, "Software version is not greater than 0"
+        )
         print(software_version)
         # fw 3.0 and above
         if software_version > 2.10:
             res = await self.coordinator.get_laser_value()
             print("laser value", res)
             self.assertIsInstance(res, int)
-            self.assertLessEqual(res, 100, "Laser value is over 100")
+            self.assertEqual(res, 0, "Laser value is over 100")
 
         # Testing content type
         content_type = await self.coordinator.get_content_type()
@@ -215,6 +215,14 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
         is_ll_on = await self.coordinator.is_ll_on()
         self.assertIsInstance(is_ll_on, bool, "is_ll_on is not a boolean")
 
+        res = await self.coordinator.exec_command(["laser_value, 35"])
+        print("laser value set to", res)
+        if software_version > 2.10:
+            res = await self.coordinator.get_laser_value()
+            print("laser value", res)
+
+            self.assertEqual(res, 35, "Laser value is not 35")
+
     async def test_exec_commands(self):
         """test executing commands"""
         # get attr
@@ -228,10 +236,10 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
         if res:
             _, res = await self.coordinator.exec_command(["menu, menu"])
 
-    async def turn_off(self):
+    async def test_turn_off(self):
         """unskip to turn off pj after tests"""
-        self.skipTest("not turning off")
-        _, res = await self.coordinator.exec_command("power, off")
+        # self.skipTest("not turning off")
+        _, res = await self.coordinator.exec_command(["power, off"])
         assert res, "failed to turn off"
 
 

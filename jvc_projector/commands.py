@@ -78,6 +78,9 @@ class PowerModes(Enum):
 
     off = b"0"
     on = b"1"
+    cooling = b"2"
+    warming = b"3"
+    emergency = b"4"
 
 
 class PowerStates(Enum):
@@ -406,7 +409,7 @@ class Commands(Enum):
 
     # Checking for model code
     # response -> \x40\x89\x01\x4D\x44(the model code)\x0A
-    get_model = b"MD"
+    get_model = b"MD", str, ACKs.model
 
     # software version
     get_software_version = b"IFSV", str, ACKs.info_ack

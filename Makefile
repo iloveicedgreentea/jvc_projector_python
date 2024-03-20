@@ -5,7 +5,7 @@ dev_install:
 	. .venv/bin/activate && \
 	pip3 install -r requirements-test.txt
 test:
-	LOG_LEVEL=info python -m unittest discover -s tests
+	python -m unittest tests/test_coordinator.py
 
 upload: build
 	twine upload dist/*

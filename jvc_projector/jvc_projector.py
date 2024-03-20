@@ -13,37 +13,16 @@ from jvc_projector.commands import (
     PJ_ACK,
     PJ_OK,
     PJ_REQ,
-    ResolutionModes,
     ACKs,
-    AspectRatioModes,
-    ColorSpaceModes,
     Commands,
-    ContentTypes,
-    ContentTypeTrans,
     Enum,
-    EshiftModes,
     Footer,
-    HdrData,
-    HdrLevel,
-    HdrProcessing,
     Header,
-    InputLevel,
-    InputModes,
-    InstallationModes,
-    LampPowerModes,
-    LaserDimModes,
-    LaserPowerModes,
     LowLatencyModes,
-    MaskModes,
-    PictureModes,
-    AnamorphicModes,
     PowerStates,
-    SourceStatuses,
-    TheaterOptimizer,
     model_map,
 )
 from jvc_projector.error_classes import (
-    BlankMessageError,
     CommandTimeoutError,
     ConnectionClosedError,
 )
@@ -64,7 +43,7 @@ class JVCAttributes:  # pylint: disable=too-many-instance-attributes
     """JVC Projector Attributes"""
 
     power_state: bool = False
-    signal_status: bool = "" 
+    signal_status: bool = ""
     picture_mode: str = ""
     resolution: str = ""
     low_latency: bool = False
@@ -88,8 +67,8 @@ class JVCAttributes:  # pylint: disable=too-many-instance-attributes
     aspect_ratio: str = ""
     anamorphic_mode: str = ""
     software_version: float = ""
-    laser_time: int = 0 
-    lamp_time: int = 0 
+    laser_time: int = 0
+    lamp_time: int = 0
     connection_active: bool = False
 
 
@@ -106,6 +85,13 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         self.logger = logger
         self.reader: asyncio.StreamReader = None
         self.writer: asyncio.StreamWriter = None
+
+        self.model_family = ""
+        self.connection_open = False
+        # attribute mapping
+        self.attributes = JVCAttributes()
+        self.lock = asyncio.Lock()
+
         self.commander = JVCCommander(
             options.host,
             options.port,
@@ -114,12 +100,8 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             logger,
             self.reader,
             self.writer,
+            self.lock,
         )
-        self.model_family = ""
-        self.connection_open = False
-        # attribute mapping
-        self.attributes = JVCAttributes()
-        self.lock = asyncio.Lock()
 
     async def _handshake(self) -> bool:
         """Perform an async 3-way handshake with the projector"""
@@ -128,24 +110,27 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             self.logger.debug("connecting with password hunter2")
         else:
             pj_req = PJ_REQ
-
         try:
             async with self.lock:
+                self.logger.debug("Sending PJ_REQ")
                 msg_pjok = await self.reader.read(len(PJ_OK))
-                self.logger.debug(msg_pjok)
-                if msg_pjok != PJ_OK:
-                    result = f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
-                    self.logger.error(result)
-                    return False
-
+            if msg_pjok != PJ_OK:
+                result = (
+                    f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
+                )
+                self.logger.error(result)
+                return False
+            self.logger.debug("PJ_OK received")
+            async with self.lock:
                 self.writer.write(pj_req)
                 await self.writer.drain()
                 msg_pjack = await self.reader.read(len(PJ_ACK))
-                if msg_pjack != PJ_ACK:
-                    result = f"Exception with PJACK: {msg_pjack}"
-                    self.logger.error(result)
-                    return False
-                self.logger.debug("Handshake successful")
+            self.logger.debug("PJ_ACK received")
+            if msg_pjack != PJ_ACK:
+                result = f"Exception with PJACK: {msg_pjack}"
+                self.logger.error(result)
+                return False
+            self.logger.debug("Handshake successful")
         except asyncio.TimeoutError:
             return False
 
@@ -155,31 +140,17 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
 
     async def _get_modelfamily(self) -> str:
         """Get the model family asynchronously"""
-        cmd = (
-            Header.reference.value
-            + Header.pj_unit.value
-            + Commands.get_model.value
-            + Footer.close.value
-        )
-        retries = 0
-        while retries < 3:
-            try:
-                res, _ = await self.commander.send_command(
-                    cmd,
-                    command_type=Header.reference.value,
-                    ack=ACKs.model.value,
-                )
-            except ConnectionClosedError:
-                self.logger.error("Connection closed")
-                # open connection and try again
-                await self.open_connection()
-                await asyncio.sleep(1)
-                retries += 1
-                continue
 
-            model_res = self.commander.replace_headers(res).decode()
-            self.logger.debug(model_res)
-            return model_map.get(model_res[-4:], "Unsupported")
+        res = await self.exec_command(
+            command="get_model", command_type=Header.reference.value
+        )
+        if not res:
+            self.logger.error("Failed to get model family")
+            return "Unsupported"
+        model_res = self.commander.replace_headers(res).decode()
+        self.logger.debug("Model result is %s", model_res)
+
+        return model_map.get(model_res[-4:], "Unsupported")
 
     async def open_connection(self) -> bool:
         """Open a connection to the projector asynchronously"""
@@ -194,9 +165,17 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                     self.options.host,
                     self.options.port,
                 )
-                self.reader, self.writer = await asyncio.open_connection(
-                    self.options.host, self.options.port
-                )
+                try:
+                    self.reader, self.writer = await asyncio.wait_for(
+                        asyncio.open_connection(self.options.host, self.options.port),
+                        timeout=10,
+                    )
+                except asyncio.TimeoutError:
+                    self.logger.warning(
+                        "open connection timed out, retrying in 2 seconds"
+                    )
+                    await asyncio.sleep(2)
+                    continue
                 # Set the reader and writer for the commander
                 self.commander.reader = self.reader
                 self.commander.writer = self.writer
@@ -213,26 +192,31 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                 return True
             except asyncio.TimeoutError:
                 self.logger.warning("Connection timed out, retrying in 2 seconds")
+                await self.close_connection()
                 await asyncio.sleep(2)
             except OSError as err:
-                self.logger.warning("Connecting failed, retrying in 2 seconds")
-                self.logger.debug(err)
+                self.logger.warning("Connecting failed, retrying in 2 seconds: %s", err)
+                await self.close_connection()
                 await asyncio.sleep(2)
 
     async def exec_command(
         self, command: Union[list[str], str], command_type: bytes = b"!"
-    ) -> tuple[str, bool]:
+    ) -> str | None:
         """
-        Wrapper for commander.send_command() externally
+        Wrapper for commander.send_command() externally to prevent circular imports
+
+        Callers should catch ConnectionClosedError
+
         command: a str of the command and value, separated by a comma ("power,on").
             or a list of commands
         This is to make home assistant UI use easier
+
+
+
         command_type: which operation, like ! or ? (default = !)
+
         Returns
-            (
-                ack or error message: str,
-                success flag: bool
-            )
+            value: str (to be cast into other types),
         """
         self.logger.debug(
             "exec_command Executing command: %s - %s", command, command_type
@@ -240,14 +224,27 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         retries = 0
         while retries < 3:
             try:
-                return await self.commander.send_command(command, command_type)
-            except ConnectionClosedError:
-                self.logger.debug("Connection closed. Reconnecting")
+                res = await self.commander.send_command(command, command_type)
+                if not res:
+                    self.logger.debug("Command failed. Retrying")
+                    retries += 1
+                    continue
+                return res
+            except (
+                ConnectionClosedError,
+                CommandTimeoutError,
+                ConnectionRefusedError,
+                BrokenPipeError,
+            ):
+                self.logger.debug(
+                    "Connection closed. Opening new connection. Retry your command"
+                )
                 # open connection and try again
                 await self.open_connection()
                 await asyncio.sleep(1)
-                retries += 1
                 continue
+
+        return None
 
     async def close_connection(self):
         """Close the projector connection asynchronously"""
@@ -267,32 +264,6 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
             self.connection_open = False
             self.attributes.connection_active = False
 
-    async def info(self) -> tuple[str, bool]:
-        """
-        Bring up the Info screen
-        """
-        cmd = (
-            Header.operation.value
-            + Header.pj_unit.value
-            + Commands.info.value
-            + Footer.close.value
-        )
-        retries = 0
-        while retries < 3:
-            try:
-                return await self.commander.send_command(
-                    cmd,
-                    ack=ACKs.menu_ack,
-                    command_type=Header.operation.value,
-                )
-            except ConnectionClosedError:
-                self.logger.error("Connection closed")
-                # open connection and try again
-                await self.open_connection()
-                await asyncio.sleep(1)
-                retries += 1
-                continue
-
     async def power_on(
         self,
     ) -> tuple[str, bool]:
@@ -307,220 +278,204 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         return await self.exec_command("power,off")
 
-    async def _get_attribute(self, command: str, ack: Enum, state_enum: Enum) -> str:
+    async def _get_attribute(self, command: str, replace: bool = True) -> str:
         """
         Generic function to get the current attribute asynchronously
         """
+        cmd_tup = Commands[command].value
+        cmd_enum = cmd_tup[1]
+        ack = cmd_tup[2]
+        self.logger.debug("Getting attribute %s with tuple %s", command, cmd_tup)
         try:
-            state, res = await self.commander.do_reference_op(command, ack)
-            if not res:
-                return state, res
-            return state_enum(state.replace(ack.value, b"")).name
-        except ValueError:
-            self.logger.error("Attribute not found")
-            return "unknown"
+            state = await self.exec_command(command, Header.reference.value)
+            if not state:
+                self.logger.debug("%s Command failed", command)
+                return ""
+            if replace:
+                # remove the returned headers
+                r = self.commander.replace_headers(state)
+                if not isinstance(r, bytes):
+                    self.logger.error("Attribute %s is not bytes", command)
+                    return ""
+                self.logger.debug("Attribute %s is %s", command, r)
+                # look up the enum value like b"1" -> on in PowerModes
+                return cmd_enum(r.replace(ack.value, b"")).name
+            else:
+                return state
+        except ValueError as err:
+            self.logger.error("Attribute not found - %s", err)
+            raise
         except AttributeError as err:
             self.logger.error("tried to access name on non-enum: %s", err)
             return ""
-        except ConnectionClosedError:
-            self.logger.debug("Connection is closed for _get_attribute")
-            # open connection and try again
-            return "Connection closed"
 
     async def get_low_latency_state(self) -> str:
         """
         Get the current state of LL
         """
-        return await self._get_attribute(
-            "low_latency", ACKs.picture_ack, LowLatencyModes
-        )
+        return await self._get_attribute("low_latency") == LowLatencyModes.on.name
 
     async def get_picture_mode(self) -> str:
         """
         Get the current picture mode as str -> user1, natural
         """
-        return await self._get_attribute("picture_mode", ACKs.picture_ack, PictureModes)
+        return await self._get_attribute("picture_mode")
 
     async def get_install_mode(self) -> str:
         """
         Get the current install mode as str
         """
-        return await self._get_attribute(
-            "installation_mode", ACKs.install_acks, InstallationModes
-        )
+        return await self._get_attribute("installation_mode")
 
     async def get_input_mode(self) -> str:
         """
         Get the current input mode
         """
-        return await self._get_attribute("input_mode", ACKs.input_ack, InputModes)
+        return await self._get_attribute("input_mode")
 
     async def get_mask_mode(self) -> str:
         """
         Get the current mask mode
         """
-        return await self._get_attribute("mask", ACKs.hdmi_ack, MaskModes)
+        return await self._get_attribute("mask")
 
     async def get_laser_mode(self) -> str:
         """
         Get the current laser mode
         """
-        return await self._get_attribute("laser_mode", ACKs.picture_ack, LaserDimModes)
+        return await self._get_attribute("laser_mode")
 
     async def get_eshift_mode(self) -> bool:
         """
         Get the current eshift mode
         """
-        res = await self._get_attribute("eshift_mode", ACKs.picture_ack, EshiftModes)
+        res = await self._get_attribute("eshift_mode")
         return res == "on"
 
     async def get_color_mode(self) -> str:
         """
         Get the current color mode
         """
-        return await self._get_attribute("color_mode", ACKs.hdmi_ack, ColorSpaceModes)
+        return await self._get_attribute("color_mode")
 
     async def get_input_level(self) -> str:
         """
         Get the current input level
         """
-        return await self._get_attribute("input_level", ACKs.hdmi_ack, InputLevel)
+        return await self._get_attribute("input_level")
 
     async def get_software_version(self) -> float:
         """
         Get the current software version
         """
-        try:
-            state, _ = await self.commander.do_reference_op(
-                "get_software_version", ACKs.info_ack
-            )
-            # returns something like 0210PJ as bytes
-            ver: str = (
-                state.replace(ACKs.info_ack.value, b"")
-                .replace(b"PJ", b"")
-                .decode()
-                # remove leading 0
-                .lstrip("0")
-            )
-            # add a dot to the version
-            return float(f"{ver[:1]}.{ver[1:]}")
-        except ConnectionClosedError:
-            self.logger.debug("Connection is closed for _get_attribute")
-            # open connection and try again
-            return 0.0
+        state = await self._get_attribute("get_software_version", replace=False)
+        self.logger.debug("Software version is %s", state)
+        # returns something like 0210PJ as bytes
+        # b'@\x89\x01IF0300PJ\n'
+        ver: str = (
+            self.commander.replace_headers(state)
+            .replace(ACKs.info_ack.value, b"")
+            .replace(b"PJ", b"")
+            .decode()
+            # remove leading 0
+            .lstrip("0")
+        )
+        # add a dot to the version
+        return float(f"{ver[:1]}.{ver[1:]}")
 
     async def get_laser_value(self) -> int:
         """
         Get the current software version FW 3.0+ only
         """
-        try:
-            state, _ = await self.commander.do_reference_op("laser_value", ACKs.picture_ack)
-            raw = int(state.replace(ACKs.picture_ack.value, b""), 16)
-            # jvc returns a weird scale 
-            return math.floor(((raw - 109) / 1.1) + 0.5)
-        except ConnectionClosedError:
-            self.logger.debug("Connection is closed for _get_attribute")
-            # open connection and try again
-            return "Connection closed"
+        state = await self._get_attribute("laser_value", replace=False)
+        raw = int(
+            self.commander.replace_headers(state).replace(ACKs.picture_ack.value, b""),
+            16,
+        )
+        # jvc returns a weird scale
+        return math.floor(((raw - 109) / 1.1) + 0.5)
 
     async def get_content_type(self) -> str:
         """
         Get the current content type
         """
-        return await self._get_attribute("content_type", ACKs.picture_ack, ContentTypes)
+        return await self._get_attribute("content_type")
 
     async def get_content_type_trans(self) -> str:
         """
         Get the current auto content transition type
         """
-        return await self._get_attribute(
-            "content_type_trans", ACKs.picture_ack, ContentTypeTrans
-        )
+        return await self._get_attribute("content_type_trans")
 
     async def get_hdr_processing(self) -> str:
         """
         Get the current hdr processing setting like frame by frame. Will fail if not in HDR mode!
         """
-        return await self._get_attribute(
-            "hdr_processing", ACKs.picture_ack, HdrProcessing
-        )
+        return await self._get_attribute("hdr_processing")
 
     async def get_hdr_level(self) -> str:
         """
         Get the current hdr quantization level
         """
-        return await self._get_attribute("hdr_level", ACKs.picture_ack, HdrLevel)
+        return await self._get_attribute("hdr_level")
 
     async def get_hdr_data(self) -> str:
         """
         Get the current hdr mode -> sdr, hdr10_plus, etc
         """
-        return await self._get_attribute("hdr_data", ACKs.info_ack, HdrData)
+        return await self._get_attribute("hdr_data")
 
     async def get_lamp_power(self) -> str:
         """
         Get the current lamp power non-NZ only
         """
-        return await self._get_attribute("lamp_power", ACKs.picture_ack, LampPowerModes)
+        return await self._get_attribute("lamp_power")
 
     async def get_lamp_time(self) -> int:
         """
         Get the current lamp time
         """
-        try:
-            state, _ = await self.commander.do_reference_op("lamp_time", ACKs.info_ack)
-            return int(state.replace(ACKs.info_ack.value, b""), 16)
-        except ConnectionClosedError:
-            self.logger.debug("Connection is closed for _get_attribute")
-            # open connection and try again
-            return 0
+        state = await self._get_attribute("lamp_time", replace=False)
+        return int(
+            self.commander.replace_headers(state).replace(ACKs.info_ack.value, b""), 16
+        )
 
     async def get_laser_power(self) -> str:
         """
         Get the current laser power NZ only
         """
-        return await self._get_attribute(
-            "laser_power", ACKs.picture_ack, LaserPowerModes
-        )
+        return await self._get_attribute("laser_power")
 
     async def get_theater_optimizer_state(self) -> str:
         """
         If theater optimizer is on/off Will fail if not in HDR mode!
         """
-        return await self._get_attribute(
-            "theater_optimizer", ACKs.picture_ack, TheaterOptimizer
-        )
+        return await self._get_attribute("theater_optimizer")
 
     async def get_aspect_ratio(self) -> str:
         """
         Return aspect ratio
         """
-        return await self._get_attribute(
-            "aspect_ratio", ACKs.hdmi_ack, AspectRatioModes
-        )
+        return await self._get_attribute("aspect_ratio")
 
     async def get_anamorphic(self) -> str:
         """
         Return anamorphic mode
         """
-        return await self._get_attribute("anamorphic", ACKs.lens_ack, AnamorphicModes)
+        return await self._get_attribute("anamorphic")
 
     async def get_source_status(self) -> bool:
         """
         Return source status True if it has a signal
         """
-        res = await self._get_attribute(
-            "source_status", ACKs.source_ack, SourceStatuses
-        )
+        res = await self._get_attribute("source_status")
         return res == "signal"
 
     async def get_source_display(self) -> str:
         """
         Return source display resolution like 4k_4096p60
         """
-        res = await self._get_attribute(
-            "source_disaply", ACKs.info_ack, ResolutionModes
-        )
+        res = await self._get_attribute("source_disaply")
 
         return res.replace("r_", "")
 
@@ -531,7 +486,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         Returns str: values of PowerStates
         """
         # remove the headers
-        return await self._get_attribute("power_status", ACKs.power_ack, PowerStates)
+        return await self._get_attribute("power_status")
 
     async def is_on(self) -> bool:
         """
