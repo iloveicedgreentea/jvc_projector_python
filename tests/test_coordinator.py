@@ -7,7 +7,6 @@ from jvc_projector.commands import (
     ColorSpaceModes,
     ContentTypes,
     ContentTypeTrans,
-    EshiftModes,
     InputLevel,
     AnamorphicModes,
     InputModes,
@@ -15,11 +14,8 @@ from jvc_projector.commands import (
     LampPowerModes,
     LaserDimModes,
     LaserPowerModes,
-    ResolutionModes,
-    LowLatencyModes,
     MaskModes,
     PictureModes,
-    SourceStatuses,
 )
 
 TEST_IP = "192.168.88.23"
