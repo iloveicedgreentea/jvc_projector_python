@@ -152,6 +152,26 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
 
         return model_map.get(model_res[-4:], "Unsupported")
 
+    async def reset_everything(self) -> None:
+        """
+        resets everything and tries to empty current jvc buffer. Used on error to just clear everything and start over
+        """
+        try:
+            if not self.connection_open:
+                await self.open_connection()
+
+            # clear the buffer
+            while not self.reader.at_eof():
+                try:
+                    await self.reader.read(1024)
+                except asyncio.IncompleteReadError:
+                    break
+
+            return
+        except Exception as e:
+            self.logger.error("Error resetting everything: %s", e)
+            return
+
     async def open_connection(self) -> bool:
         """Open a connection to the projector asynchronously"""
         # If the connection is already open, return True
