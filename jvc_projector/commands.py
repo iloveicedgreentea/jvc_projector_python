@@ -327,6 +327,7 @@ class ThreeD(Enum):
     sbs = b"3"
     tb = b"4"
 
+
 class ResolutionModes(Enum):
     r_480p = b"02"
     r_576p = b"03"
@@ -387,6 +388,7 @@ class ResolutionModes(Enum):
     WQHD60 = b"3D"
     WOQHD120 = b"3E"
     r_8K_7680x4320p48 = b"3F"
+
 
 class Commands(Enum):
 
@@ -465,7 +467,7 @@ class Commands(Enum):
 
     # Lamp power
     lamp_power = b"PMLP", LampPowerModes, ACKs.picture_ack
-   
+
     # Lamp time
     lamp_time = b"IFLT", int, ACKs.info_ack
 

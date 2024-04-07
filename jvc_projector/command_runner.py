@@ -107,6 +107,7 @@ class JVCCommander:
             command_type=Header.operation.value,
         )
 
+    # TODO: this should use a single lock while its running
     async def _do_command(
         self,
         final_cmd: bytes,
@@ -153,6 +154,7 @@ class JVCCommander:
             # read everything
             self.logger.debug("acquiring command read lock")
             async with self.lock:
+                # TODO: its probably way more reliable to read everything and just search for the data we want
                 msg = await self.reader.read(len(ack_value))
                 self.logger.debug("received msg in _do_command: %s", msg)
 

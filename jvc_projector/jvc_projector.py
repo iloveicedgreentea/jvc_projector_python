@@ -320,8 +320,8 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                 self.logger.debug("Attribute %s is %s", command, r)
                 # look up the enum value like b"1" -> on in PowerModes
                 return cmd_enum(r.replace(ack.value, b"")).name
-            else:
-                return state
+
+            return state
         except ValueError as err:
             self.logger.error("Attribute not found - %s", err)
             raise
