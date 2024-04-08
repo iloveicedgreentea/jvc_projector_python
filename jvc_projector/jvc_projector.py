@@ -163,11 +163,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                 await self.open_connection()
 
             # clear the buffer
-            while not self.reader.at_eof():
-                try:
-                    await self.reader.read(1024)
-                except asyncio.IncompleteReadError:
-                    break
+            await self.commander.read_until_empty()
 
             return
         except Exception as e:
@@ -253,9 +249,9 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                         retries += 1
                         continue
                     return res
+                # this means stuff is actually broken
                 except (
                     ConnectionClosedError,
-                    CommandTimeoutError,
                     ConnectionRefusedError,
                     BrokenPipeError,
                 ):
@@ -264,9 +260,13 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                     )
                     # open connection and try again
                     await self.open_connection()
-                    await asyncio.sleep(1)
+                    retries += 1
                     continue
-
+                # getting here means the command is not allowed
+                except CommandTimeoutError:
+                    self.logger.debug("Command timed out. Very likely its not allowed to run (This is not a bug. JVC's fault)")
+                    return None
+            self.logger.error("Command failed after 3 retries")
             return None
 
     async def close_connection(self):
@@ -305,32 +305,33 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Generic function to get the current attribute asynchronously
         """
-        cmd_tup = Commands[command].value
-        cmd_enum = cmd_tup[1]
-        ack = cmd_tup[2]
-        self.logger.debug("Getting attribute %s with tuple %s", command, cmd_tup)
-        try:
-            state = await self.exec_command(command, Header.reference.value)
-            if not state:
-                self.logger.debug("%s Command failed", command)
-                return ""
-            if replace:
-                # remove the returned headers
-                r = self.commander.replace_headers(state)
-                if not isinstance(r, bytes):
-                    self.logger.error("Attribute %s is not bytes", command)
+        async with self.attr_lock:
+            cmd_tup = Commands[command].value
+            cmd_enum = cmd_tup[1]
+            ack = cmd_tup[2]
+            self.logger.debug("Getting attribute %s with tuple %s", command, cmd_tup)
+            try:
+                state = await self.exec_command(command, Header.reference.value)
+                if not state:
+                    self.logger.debug("%s Command failed", command)
                     return ""
-                self.logger.debug("Attribute %s is %s", command, r)
-                # look up the enum value like b"1" -> on in PowerModes
-                return cmd_enum(r.replace(ack.value, b"")).name
+                if replace:
+                    # remove the returned headers
+                    r = self.commander.replace_headers(state)
+                    if not isinstance(r, bytes):
+                        self.logger.error("Attribute %s is not bytes", command)
+                        return ""
+                    self.logger.debug("Attribute %s is %s", command, r)
+                    # look up the enum value like b"1" -> on in PowerModes
+                    return cmd_enum(r.replace(ack.value, b"")).name
 
-            return state
-        except ValueError as err:
-            self.logger.error("Attribute not found - %s", err)
-            raise
-        except AttributeError as err:
-            self.logger.error("tried to access name on non-enum: %s", err)
-            return ""
+                return state
+            except ValueError as err:
+                self.logger.error("Attribute not found - %s", err)
+                raise
+            except AttributeError as err:
+                self.logger.error("tried to access name on non-enum: %s", err)
+                return ""
 
     async def get_low_latency_state(self) -> str:
         """

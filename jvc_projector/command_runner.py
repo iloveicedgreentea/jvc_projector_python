@@ -107,6 +107,25 @@ class JVCCommander:
             command_type=Header.operation.value,
         )
 
+    async def read_until_empty(self):
+        """
+        Read buffer until empty
+        """
+        while True:
+            try:
+                # Read data from the buffer with a specified buffer size
+                data = await asyncio.wait_for(self.reader.read(1024), timeout=0.5)
+                if not data:
+                    # If no data is received, the buffer is empty
+                    break
+            except asyncio.TimeoutError:
+                # If a timeout occurs, assume the buffer is empty and break the loop
+                break
+            except Exception as e:
+                # Handle any other exceptions that may occur during reading
+                self.logger.error("Error while clearing read buffer: %s", e)
+                break
+
     async def _do_command(
         self,
         final_cmd: bytes,
@@ -123,10 +142,8 @@ class JVCCommander:
             self.logger.debug("do_command sending command: %s", final_cmd)
             # send the command
             try:
-                self.logger.debug("acquiring command lock")
                 self.writer.write(final_cmd)
                 await self.writer.drain()
-                self.logger.debug("released command lock")
             except BrokenPipeError as err:
                 self.logger.error(
                     "BrokenPipeError in _do_command restarting connection: %s", err
@@ -145,17 +162,28 @@ class JVCCommander:
             # an ack, followed by the actual message. Check to see if the ack sent by
             # projector is correct, then return the message.
 
-            ack_value = Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
+            # if the command_type is operation, the ack doesnt matter we should read until empty
+            # read until empty
+            if command_type == Header.operation.value:
+                self.logger.debug("command_type is operation skipping ack check")
+                return await self.read_until_empty()
+
+            ack_value = (
+                Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
+            )
             self.logger.debug("constructed ack_value: %s", ack_value)
 
             # Receive the acknowledgement from PJ
             try:
                 # read everything
-                self.logger.debug("acquiring command read lock")
                 # TODO: its probably way more reliable to read everything and just search for the data we want
-                msg = await self.reader.read(len(ack_value))
-                self.logger.debug("received msg in _do_command: %s", msg)
-
+                try:
+                    msg = await asyncio.wait_for(self.reader.read(len(ack_value)), timeout=1)
+                    self.logger.debug("received msg in _do_command: %s", msg)
+                except asyncio.TimeoutError as err:
+                    # this means the command isnt allowed to run, probably
+                    self.logger.debug("TimeoutError reading in _do_command: %s", err)
+                    raise CommandTimeoutError("Timed out") from err
                 # read the actual message, if any
                 if msg == b"":  # if we got a blank response
                     self.logger.debug("Got a blank response")
@@ -177,7 +205,6 @@ class JVCCommander:
                 self.logger.debug(err)
                 raise ConnectionRefusedError(error) from err
 
-    # TODO: use this to construct commands from a list that is a str like ["menu,menu"]
     def construct_command(
         self, raw_command: str, command_type: bytes
     ) -> tuple[bytes, ACKs]:
