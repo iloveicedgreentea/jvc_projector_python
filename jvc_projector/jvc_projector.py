@@ -305,33 +305,32 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Generic function to get the current attribute asynchronously
         """
-        async with self.attr_lock:
-            cmd_tup = Commands[command].value
-            cmd_enum = cmd_tup[1]
-            ack = cmd_tup[2]
-            self.logger.debug("Getting attribute %s with tuple %s", command, cmd_tup)
-            try:
-                state = await self.exec_command(command, Header.reference.value)
-                if not state:
-                    self.logger.debug("%s Command failed", command)
-                    return ""
-                if replace:
-                    # remove the returned headers
-                    r = self.commander.replace_headers(state)
-                    if not isinstance(r, bytes):
-                        self.logger.error("Attribute %s is not bytes", command)
-                        return ""
-                    self.logger.debug("Attribute %s is %s", command, r)
-                    # look up the enum value like b"1" -> on in PowerModes
-                    return cmd_enum(r.replace(ack.value, b"")).name
-
-                return state
-            except ValueError as err:
-                self.logger.error("Attribute not found - %s", err)
-                raise
-            except AttributeError as err:
-                self.logger.error("tried to access name on non-enum: %s", err)
+        cmd_tup = Commands[command].value
+        cmd_enum = cmd_tup[1]
+        ack = cmd_tup[2]
+        self.logger.debug("Getting attribute %s with tuple %s", command, cmd_tup)
+        try:
+            state = await self.exec_command(command, Header.reference.value)
+            if not state:
+                self.logger.debug("%s Command failed", command)
                 return ""
+            if replace:
+                # remove the returned headers
+                r = self.commander.replace_headers(state)
+                if not isinstance(r, bytes):
+                    self.logger.error("Attribute %s is not bytes", command)
+                    return ""
+                self.logger.debug("Attribute %s is %s", command, r)
+                # look up the enum value like b"1" -> on in PowerModes
+                return cmd_enum(r.replace(ack.value, b"")).name
+
+            return state
+        except ValueError as err:
+            self.logger.error("Attribute not found - %s", err)
+            raise
+        except AttributeError as err:
+            self.logger.error("tried to access name on non-enum: %s", err)
+            return ""
 
     async def get_low_latency_state(self) -> str:
         """
