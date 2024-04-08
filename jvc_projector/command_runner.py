@@ -107,78 +107,75 @@ class JVCCommander:
             command_type=Header.operation.value,
         )
 
-    # TODO: this should use a single lock while its running
     async def _do_command(
         self,
         final_cmd: bytes,
         ack: bytes,
         command_type: bytes,
     ) -> tuple[Union[str, bytes]]:
-        self.logger.debug("final_cmd: %s with ack %s", final_cmd, ack)
-        # ensure this doesnt run with dead client
-        if self.writer is None:
-            self.logger.debug("Writer is closed")
-            raise ConnectionClosedError("writer is none")
+        async with self.lock:
+            self.logger.debug("final_cmd: %s with ack %s", final_cmd, ack)
+            # ensure this doesnt run with dead client
+            if self.writer is None:
+                self.logger.debug("Writer is closed")
+                raise ConnectionClosedError("writer is none")
 
-        self.logger.debug("do_command sending command: %s", final_cmd)
-        # send the command
-        try:
-            self.logger.debug("acquiring command lock")
-            async with self.lock:
+            self.logger.debug("do_command sending command: %s", final_cmd)
+            # send the command
+            try:
+                self.logger.debug("acquiring command lock")
                 self.writer.write(final_cmd)
                 await self.writer.drain()
-            self.logger.debug("released command lock")
-        except BrokenPipeError as err:
-            self.logger.error(
-                "BrokenPipeError in _do_command restarting connection: %s", err
-            )
-            # Attempt to reconnect or handle the broken pipe scenario
-            raise ConnectionClosedError("Broken pipe") from err
-        except ConnectionResetError as err:
-            self.logger.debug("ConnectionResetError in _do_command: %s", err)
-            # Handle connection reset specifically, if different from broken pipe
-            raise ConnectionClosedError("Connection reset") from err
-        except ConnectionError as err:
-            # reaching this means the writer was closed somewhere
-            self.logger.debug("ConnectionError in _do_command: %s", err)
-            raise ConnectionClosedError(err) from err
-        # if we send a command that returns info, the projector will send
-        # an ack, followed by the actual message. Check to see if the ack sent by
-        # projector is correct, then return the message.
+                self.logger.debug("released command lock")
+            except BrokenPipeError as err:
+                self.logger.error(
+                    "BrokenPipeError in _do_command restarting connection: %s", err
+                )
+                # Attempt to reconnect or handle the broken pipe scenario
+                raise ConnectionClosedError("Broken pipe") from err
+            except ConnectionResetError as err:
+                self.logger.debug("ConnectionResetError in _do_command: %s", err)
+                # Handle connection reset specifically, if different from broken pipe
+                raise ConnectionClosedError("Connection reset") from err
+            except ConnectionError as err:
+                # reaching this means the writer was closed somewhere
+                self.logger.debug("ConnectionError in _do_command: %s", err)
+                raise ConnectionClosedError(err) from err
+            # if we send a command that returns info, the projector will send
+            # an ack, followed by the actual message. Check to see if the ack sent by
+            # projector is correct, then return the message.
 
-        ack_value = Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
-        self.logger.debug("constructed ack_value: %s", ack_value)
+            ack_value = Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
+            self.logger.debug("constructed ack_value: %s", ack_value)
 
-        # Receive the acknowledgement from PJ
-        try:
-            # read everything
-            self.logger.debug("acquiring command read lock")
-            async with self.lock:
+            # Receive the acknowledgement from PJ
+            try:
+                # read everything
+                self.logger.debug("acquiring command read lock")
                 # TODO: its probably way more reliable to read everything and just search for the data we want
                 msg = await self.reader.read(len(ack_value))
                 self.logger.debug("received msg in _do_command: %s", msg)
 
-            # read the actual message, if any
-            if msg == b"":  # if we got a blank response
-                self.logger.debug("Got a blank response")
-                raise BlankMessageError("Got a blank response")
-            if command_type == Header.operation.value:
-                return msg, True
-            else:
-                async with self.lock:
+                # read the actual message, if any
+                if msg == b"":  # if we got a blank response
+                    self.logger.debug("Got a blank response")
+                    raise BlankMessageError("Got a blank response")
+                if command_type == Header.operation.value:
+                    return msg, True
+                else:
                     ref_msg = await self.reader.read(1000)
-                self.logger.debug("received ref_msg in _do_command: %s", ref_msg)
-                # msg = await self._check_received_msg(received_ack, ack_value, command_type)
-                self.logger.debug("finished reading ref_msg")
-                return ref_msg.replace(ack_value, b"")
-        except socket.timeout as err:
-            error = f"Timed out. Command {final_cmd} may grayed out or cmd is running already."
-            self.logger.debug(err)
-            raise CommandTimeoutError(error) from err
+                    self.logger.debug("received ref_msg in _do_command: %s", ref_msg)
+                    # msg = await self._check_received_msg(received_ack, ack_value, command_type)
+                    self.logger.debug("finished reading ref_msg")
+                    return ref_msg.replace(ack_value, b"")
+            except socket.timeout as err:
+                error = f"Timed out. Command {final_cmd} may grayed out or cmd is running already."
+                self.logger.debug(err)
+                raise CommandTimeoutError(error) from err
 
-        except ConnectionRefusedError as err:
-            self.logger.debug(err)
-            raise ConnectionRefusedError(error) from err
+            except ConnectionRefusedError as err:
+                self.logger.debug(err)
+                raise ConnectionRefusedError(error) from err
 
     # TODO: use this to construct commands from a list that is a str like ["menu,menu"]
     def construct_command(
