@@ -77,9 +77,6 @@ class JVCCommander:
         """
         cmd, ack = self.construct_command(command, command_type)
 
-        # Check commands
-        self.logger.debug("command: %s", cmd)
-
         try:
             return await self._do_command(cmd, ack, command_type)
 
@@ -139,7 +136,6 @@ class JVCCommander:
                 self.logger.debug("Writer is closed")
                 raise ConnectionClosedError("writer is none")
 
-            self.logger.debug("do_command sending command: %s", final_cmd)
             # send the command
             try:
                 self.writer.write(final_cmd)
@@ -176,9 +172,10 @@ class JVCCommander:
             # Receive the acknowledgement from PJ
             try:
                 # read everything
-                # TODO: its probably way more reliable to read everything and just search for the data we want
                 try:
-                    msg = await asyncio.wait_for(self.reader.read(len(ack_value)), timeout=1)
+                    msg = await asyncio.wait_for(
+                        self.reader.read(len(ack_value)), timeout=1
+                    )
                     self.logger.debug("received msg in _do_command: %s", msg)
                 except asyncio.TimeoutError as err:
                     # this means the command isnt allowed to run, probably
@@ -190,12 +187,14 @@ class JVCCommander:
                     raise BlankMessageError("Got a blank response")
                 if command_type == Header.operation.value:
                     return msg, True
-                else:
-                    ref_msg = await self.reader.read(1000)
-                    self.logger.debug("received ref_msg in _do_command: %s", ref_msg)
-                    # msg = await self._check_received_msg(received_ack, ack_value, command_type)
-                    self.logger.debug("finished reading ref_msg")
-                    return ref_msg.replace(ack_value, b"")
+
+                # have to read again to get the value
+                ref_msg = await self.reader.read(1000)
+                self.logger.debug("received ref_msg in _do_command: %s", ref_msg)
+                # msg = await self._check_received_msg(received_ack, ack_value, command_type)
+                self.logger.debug("finished reading ref_msg")
+                return ref_msg.replace(ack_value, b"")
+
             except socket.timeout as err:
                 error = f"Timed out. Command {final_cmd} may grayed out or cmd is running already."
                 self.logger.debug(err)

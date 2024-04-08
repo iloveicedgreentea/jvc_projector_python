@@ -25,6 +25,7 @@ from jvc_projector.commands import (
 from jvc_projector.error_classes import (
     CommandTimeoutError,
     ConnectionClosedError,
+    ShouldReconnectError,
 )
 
 
@@ -254,17 +255,14 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
                     ConnectionClosedError,
                     ConnectionRefusedError,
                     BrokenPipeError,
-                ):
-                    self.logger.debug(
-                        "Connection closed. Opening new connection. Retry your command"
-                    )
-                    # open connection and try again
-                    await self.open_connection()
-                    retries += 1
-                    continue
+                ) as err:
+                    self.logger.debug("Connection closed. Retry your command")
+                    raise ShouldReconnectError(err) from err
                 # getting here means the command is not allowed
                 except CommandTimeoutError:
-                    self.logger.debug("Command timed out. Very likely its not allowed to run (This is not a bug. JVC's fault)")
+                    self.logger.debug(
+                        "Command timed out. Very likely its not allowed to run (This is not a bug. JVC's fault)"
+                    )
                     return None
             self.logger.error("Command failed after 3 retries")
             return None

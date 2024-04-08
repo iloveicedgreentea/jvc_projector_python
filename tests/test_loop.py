@@ -108,15 +108,19 @@ class JVCRemote:
         """this is used to sort the queue because it contains non-comparable items"""
         return next(self._counter)
 
+    async def wait_until_connected(self, wait_time: float = 0.1) -> bool:
+        """Wait until the connection is open."""
+        while not self.jvc_client.connection_open:
+            await asyncio.sleep(wait_time)
+        return True
+
     async def handle_queue(self):
         """
         Handle items in command queue.
         This is run in an event loop
         """
         while True:
-            if not self.jvc_client.connection_open:
-                await asyncio.sleep(5)
-                continue
+            await self.wait_until_connected(5)
             try:
                 _LOGGER.debug(
                     "queue size is %s - attribute size is %s",
@@ -203,12 +207,12 @@ class JVCRemote:
                 continue
             # catch wrong values
             except ValueError as err:
-                _LOGGER.warning("ValueError in handle_queue: %s", err)
+                _LOGGER.error("ValueError in handle_queue: %s", err)
                 # Not sure what causes these but we can at least try to ignore them
                 self.command_queue.task_done()
                 continue
             except Exception as err:  # pylint: disable=broad-except
-                _LOGGER.debug("Unhandled exception in handle_queue: %s", err)
+                _LOGGER.error("Unhandled exception in handle_queue: %s", err)
                 await self.reset_everything()
                 continue
 
@@ -283,7 +287,7 @@ class JVCRemote:
         """Send the power on command."""
 
         self._state = True
-
+        await self.wait_until_connected()
         try:
             await self.jvc_client.power_on()
             self.stop_processing_commands.clear()
@@ -295,14 +299,13 @@ class JVCRemote:
 
     async def async_turn_off(self, **kwargs):  # pylint: disable=unused-argument
         """Send the power off command."""
-
+        await self.wait_until_connected()
         self._state = False
 
         try:
             await self.jvc_client.power_off()
             self.stop_processing_commands.set()
             await self.clear_queue()
-            self.jvc_client.attributes.connection_active = False
             # save state
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.error("Error turning off projector: %s", err)
@@ -317,7 +320,6 @@ class JVCRemote:
         while True:
             # copy it so we can remove items from it
             attrs = self.attribute_getters.copy()
-            _LOGGER.debug("Attribute size is %s", self.attribute_getters)
             for getter, name in attrs:
                 # you might be thinking why is this here?
                 # oh boy let me tell you
@@ -340,7 +342,7 @@ class JVCRemote:
         """
         while True:
             await asyncio.sleep(3)
-            if self.jvc_client.connection_open is True:
+            if await self.wait_until_connected():
                 # certain commands can only run at certain times
                 # if they fail (i.e grayed out on menu) JVC will simply time out. Bad UX
                 # have to add specific commands in a precise order
@@ -349,8 +351,9 @@ class JVCRemote:
 
                 self._state = self.jvc_client.attributes.power_state
                 _LOGGER.debug("power state is : %s", self._state)
-                self.attribute_getters.add((self.jvc_client.get_test_command, "picture_mode"))
-                _LOGGER.debug(self.attribute_getters)
+                self.attribute_getters.add(
+                    (self.jvc_client.get_test_command, "picture_mode")
+                )
                 if self._state:
                     # takes a func and an attribute to write result into
                     self.attribute_getters.update(
@@ -407,10 +410,16 @@ class JVCRemote:
                     # get laser value if fw is a least 3.0
                     if "NZ" in self.jvc_client.model_family:
                         try:
-                            if float(self.jvc_client.attributes.software_version) >= 3.00:
+                            if (
+                                float(self.jvc_client.attributes.software_version)
+                                >= 3.00
+                            ):
                                 self.attribute_getters.update(
                                     [
-                                        (self.jvc_client.get_laser_value, "laser_value"),
+                                        (
+                                            self.jvc_client.get_laser_value,
+                                            "laser_value",
+                                        ),
                                     ]
                                 )
                         except ValueError:
@@ -459,7 +468,10 @@ class TestCoordinator(unittest.IsolatedAsyncioTestCase):
 
     async def testCmd(self):
         """Test command"""
-        await asyncio.sleep(7)
+
+        if not self.c.jvc_client.is_on:
+            await self.c.async_turn_on()
+        await asyncio.sleep(30)
         # for _ in range(100):
         #     # await self.c.async_send_command(["menu", "on"])
         #     # print(self.c.is_on)
