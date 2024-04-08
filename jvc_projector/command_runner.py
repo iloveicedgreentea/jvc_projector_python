@@ -77,9 +77,6 @@ class JVCCommander:
         """
         cmd, ack = self.construct_command(command, command_type)
 
-        # Check commands
-        self.logger.debug("command: %s", cmd)
-
         try:
             return await self._do_command(cmd, ack, command_type)
 
@@ -107,78 +104,106 @@ class JVCCommander:
             command_type=Header.operation.value,
         )
 
+    async def read_until_empty(self):
+        """
+        Read buffer until empty
+        """
+        while True:
+            try:
+                # Read data from the buffer with a specified buffer size
+                data = await asyncio.wait_for(self.reader.read(1024), timeout=0.5)
+                if not data:
+                    # If no data is received, the buffer is empty
+                    break
+            except asyncio.TimeoutError:
+                # If a timeout occurs, assume the buffer is empty and break the loop
+                break
+            except Exception as e:
+                # Handle any other exceptions that may occur during reading
+                self.logger.error("Error while clearing read buffer: %s", e)
+                break
+
     async def _do_command(
         self,
         final_cmd: bytes,
         ack: bytes,
         command_type: bytes,
     ) -> tuple[Union[str, bytes]]:
-        self.logger.debug("final_cmd: %s with ack %s", final_cmd, ack)
-        # ensure this doesnt run with dead client
-        if self.writer is None:
-            self.logger.debug("Writer is closed")
-            raise ConnectionClosedError("writer is none")
+        async with self.lock:
+            self.logger.debug("final_cmd: %s with ack %s", final_cmd, ack)
+            # ensure this doesnt run with dead client
+            if self.writer is None:
+                self.logger.debug("Writer is closed")
+                raise ConnectionClosedError("writer is none")
 
-        self.logger.debug("do_command sending command: %s", final_cmd)
-        # send the command
-        try:
-            self.logger.debug("acquiring command lock")
-            async with self.lock:
+            # send the command
+            try:
                 self.writer.write(final_cmd)
                 await self.writer.drain()
-            self.logger.debug("released command lock")
-        except BrokenPipeError as err:
-            self.logger.error(
-                "BrokenPipeError in _do_command restarting connection: %s", err
-            )
-            # Attempt to reconnect or handle the broken pipe scenario
-            raise ConnectionClosedError("Broken pipe") from err
-        except ConnectionResetError as err:
-            self.logger.debug("ConnectionResetError in _do_command: %s", err)
-            # Handle connection reset specifically, if different from broken pipe
-            raise ConnectionClosedError("Connection reset") from err
-        except ConnectionError as err:
-            # reaching this means the writer was closed somewhere
-            self.logger.debug("ConnectionError in _do_command: %s", err)
-            raise ConnectionClosedError(err) from err
-        # if we send a command that returns info, the projector will send
-        # an ack, followed by the actual message. Check to see if the ack sent by
-        # projector is correct, then return the message.
+            except BrokenPipeError as err:
+                self.logger.error(
+                    "BrokenPipeError in _do_command restarting connection: %s", err
+                )
+                # Attempt to reconnect or handle the broken pipe scenario
+                raise ConnectionClosedError("Broken pipe") from err
+            except ConnectionResetError as err:
+                self.logger.debug("ConnectionResetError in _do_command: %s", err)
+                # Handle connection reset specifically, if different from broken pipe
+                raise ConnectionClosedError("Connection reset") from err
+            except ConnectionError as err:
+                # reaching this means the writer was closed somewhere
+                self.logger.debug("ConnectionError in _do_command: %s", err)
+                raise ConnectionClosedError(err) from err
+            # if we send a command that returns info, the projector will send
+            # an ack, followed by the actual message. Check to see if the ack sent by
+            # projector is correct, then return the message.
 
-        ack_value = Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
-        self.logger.debug("constructed ack_value: %s", ack_value)
-
-        # Receive the acknowledgement from PJ
-        try:
-            # read everything
-            self.logger.debug("acquiring command read lock")
-            async with self.lock:
-                msg = await self.reader.read(len(ack_value))
-                self.logger.debug("received msg in _do_command: %s", msg)
-
-            # read the actual message, if any
-            if msg == b"":  # if we got a blank response
-                self.logger.debug("Got a blank response")
-                raise BlankMessageError("Got a blank response")
+            # if the command_type is operation, the ack doesnt matter we should read until empty
+            # read until empty
             if command_type == Header.operation.value:
-                return msg, True
-            else:
-                async with self.lock:
-                    ref_msg = await self.reader.read(1000)
+                self.logger.debug("command_type is operation skipping ack check")
+                return await self.read_until_empty()
+
+            ack_value = (
+                Header.ack.value + Header.pj_unit.value + ack + Footer.close.value
+            )
+            self.logger.debug("constructed ack_value: %s", ack_value)
+
+            # Receive the acknowledgement from PJ
+            try:
+                # read everything
+                try:
+                    msg = await asyncio.wait_for(
+                        self.reader.read(len(ack_value)), timeout=1
+                    )
+                    self.logger.debug("received msg in _do_command: %s", msg)
+                except asyncio.TimeoutError as err:
+                    # this means the command isnt allowed to run, probably
+                    self.logger.debug("TimeoutError reading in _do_command: %s", err)
+                    raise CommandTimeoutError("Timed out") from err
+                # read the actual message, if any
+                if msg == b"":  # if we got a blank response
+                    self.logger.debug("Got a blank response")
+                    raise BlankMessageError("Got a blank response")
+                if command_type == Header.operation.value:
+                    return msg, True
+
+                # have to read again to get the value
+                ref_msg = await self.reader.read(1000)
                 self.logger.debug("received ref_msg in _do_command: %s", ref_msg)
                 # msg = await self._check_received_msg(received_ack, ack_value, command_type)
                 self.logger.debug("finished reading ref_msg")
                 return ref_msg.replace(ack_value, b"")
-        except socket.timeout as err:
-            error = f"Timed out. Command {final_cmd} may grayed out or cmd is running already."
-            self.logger.debug(err)
-            raise CommandTimeoutError(error) from err
 
-        except ConnectionRefusedError as err:
-            self.logger.debug(err)
-            raise ConnectionRefusedError(error) from err
+            except socket.timeout as err:
+                error = f"Timed out. Command {final_cmd} may grayed out or cmd is running already."
+                self.logger.debug(err)
+                raise CommandTimeoutError(error) from err
 
-    # TODO: use this to construct commands from a list that is a str like ["menu,menu"]
+            except ConnectionRefusedError as err:
+                self.logger.debug(err)
+                raise ConnectionRefusedError(error) from err
+
     def construct_command(
         self, raw_command: str, command_type: bytes
     ) -> tuple[bytes, ACKs]:

@@ -327,6 +327,7 @@ class ThreeD(Enum):
     sbs = b"3"
     tb = b"4"
 
+
 class ResolutionModes(Enum):
     r_480p = b"02"
     r_576p = b"03"
@@ -388,6 +389,7 @@ class ResolutionModes(Enum):
     WOQHD120 = b"3E"
     r_8K_7680x4320p48 = b"3F"
 
+
 class Commands(Enum):
 
     # these use ! unless otherwise indicated
@@ -410,7 +412,6 @@ class Commands(Enum):
     # Checking for model code
     # response -> \x40\x89\x01\x4D\x44(the model code)\x0A
     get_model = b"MD", str, ACKs.model
-
     # software version
     get_software_version = b"IFSV", str, ACKs.info_ack
 
@@ -465,7 +466,7 @@ class Commands(Enum):
 
     # Lamp power
     lamp_power = b"PMLP", LampPowerModes, ACKs.picture_ack
-   
+
     # Lamp time
     lamp_time = b"IFLT", int, ACKs.info_ack
 

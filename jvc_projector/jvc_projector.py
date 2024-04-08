@@ -25,6 +25,7 @@ from jvc_projector.commands import (
 from jvc_projector.error_classes import (
     CommandTimeoutError,
     ConnectionClosedError,
+    ShouldReconnectError,
 )
 
 
@@ -91,6 +92,8 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         # attribute mapping
         self.attributes = JVCAttributes()
         self.lock = asyncio.Lock()
+        self.attr_lock = asyncio.Lock()
+        self.exec_lock = asyncio.Lock()
 
         self.commander = JVCCommander(
             options.host,
@@ -151,6 +154,22 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         self.logger.debug("Model result is %s", model_res)
 
         return model_map.get(model_res[-4:], "Unsupported")
+
+    async def reset_everything(self) -> None:
+        """
+        resets everything and tries to empty current jvc buffer. Used on error to just clear everything and start over
+        """
+        try:
+            if not self.connection_open:
+                await self.open_connection()
+
+            # clear the buffer
+            await self.commander.read_until_empty()
+
+            return
+        except Exception as e:
+            self.logger.error("Error resetting everything: %s", e)
+            return
 
     async def open_connection(self) -> bool:
         """Open a connection to the projector asynchronously"""
@@ -218,33 +237,35 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         Returns
             value: str (to be cast into other types),
         """
-        self.logger.debug(
-            "exec_command Executing command: %s - %s", command, command_type
-        )
-        retries = 0
-        while retries < 3:
-            try:
-                res = await self.commander.send_command(command, command_type)
-                if not res:
-                    self.logger.debug("Command failed. Retrying")
-                    retries += 1
-                    continue
-                return res
-            except (
-                ConnectionClosedError,
-                CommandTimeoutError,
-                ConnectionRefusedError,
-                BrokenPipeError,
-            ):
-                self.logger.debug(
-                    "Connection closed. Opening new connection. Retry your command"
-                )
-                # open connection and try again
-                await self.open_connection()
-                await asyncio.sleep(1)
-                continue
-
-        return None
+        async with self.exec_lock:
+            self.logger.debug(
+                "exec_command Executing command: %s - %s", command, command_type
+            )
+            retries = 0
+            while retries < 3:
+                try:
+                    res = await self.commander.send_command(command, command_type)
+                    if not res:
+                        self.logger.debug("Command failed. Retrying")
+                        retries += 1
+                        continue
+                    return res
+                # this means stuff is actually broken
+                except (
+                    ConnectionClosedError,
+                    ConnectionRefusedError,
+                    BrokenPipeError,
+                ) as err:
+                    self.logger.debug("Connection closed. Retry your command")
+                    raise ShouldReconnectError(err) from err
+                # getting here means the command is not allowed
+                except CommandTimeoutError:
+                    self.logger.debug(
+                        "Command timed out. Very likely its not allowed to run (This is not a bug. JVC's fault)"
+                    )
+                    return None
+            self.logger.error("Command failed after 3 retries")
+            return None
 
     async def close_connection(self):
         """Close the projector connection asynchronously"""
@@ -282,32 +303,33 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Generic function to get the current attribute asynchronously
         """
-        cmd_tup = Commands[command].value
-        cmd_enum = cmd_tup[1]
-        ack = cmd_tup[2]
-        self.logger.debug("Getting attribute %s with tuple %s", command, cmd_tup)
-        try:
-            state = await self.exec_command(command, Header.reference.value)
-            if not state:
-                self.logger.debug("%s Command failed", command)
-                return ""
-            if replace:
-                # remove the returned headers
-                r = self.commander.replace_headers(state)
-                if not isinstance(r, bytes):
-                    self.logger.error("Attribute %s is not bytes", command)
+        async with self.attr_lock:
+            cmd_tup = Commands[command].value
+            cmd_enum = cmd_tup[1]
+            ack = cmd_tup[2]
+            self.logger.debug("Getting attribute %s with tuple %s", command, cmd_tup)
+            try:
+                state = await self.exec_command(command, Header.reference.value)
+                if not state:
+                    self.logger.debug("%s Command failed", command)
                     return ""
-                self.logger.debug("Attribute %s is %s", command, r)
-                # look up the enum value like b"1" -> on in PowerModes
-                return cmd_enum(r.replace(ack.value, b"")).name
-            else:
+                if replace:
+                    # remove the returned headers
+                    r = self.commander.replace_headers(state)
+                    if not isinstance(r, bytes):
+                        self.logger.error("Attribute %s is not bytes", command)
+                        return ""
+                    self.logger.debug("Attribute %s is %s", command, r)
+                    # look up the enum value like b"1" -> on in PowerModes
+                    return cmd_enum(r.replace(ack.value, b"")).name
+
                 return state
-        except ValueError as err:
-            self.logger.error("Attribute not found - %s", err)
-            raise
-        except AttributeError as err:
-            self.logger.error("tried to access name on non-enum: %s", err)
-            return ""
+            except ValueError as err:
+                self.logger.error("Attribute not found - %s", err)
+                raise
+            except AttributeError as err:
+                self.logger.error("tried to access name on non-enum: %s", err)
+                return ""
 
     async def get_low_latency_state(self) -> str:
         """

@@ -12,3 +12,7 @@ class BlankMessageError(Exception):
 
 class CommandRetryExceededError(Exception):
     pass
+
+
+class ShouldReconnectError(Exception):
+    pass
