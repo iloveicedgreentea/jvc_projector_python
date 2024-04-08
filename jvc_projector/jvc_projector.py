@@ -335,7 +335,7 @@ class JVCProjectorCoordinator:  # pylint: disable=too-many-public-methods
         """
         Get the current state of LL
         """
-        return await self._get_attribute("low_latency") == LowLatencyModes.on.name
+        return await self._get_attribute("low_latency")
 
     async def get_picture_mode(self) -> str:
         """
