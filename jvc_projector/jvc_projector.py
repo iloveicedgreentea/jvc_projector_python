@@ -3,9 +3,10 @@ Implements the JVC protocol
 """
 
 import logging
-from typing import Final, Union
+import math
+from typing import Union
+import threading
 import socket
-import time
 from jvc_projector.commands import (
     InputLevel,
     ColorSpaceModes,
@@ -32,6 +33,13 @@ from jvc_projector.commands import (
     MaskModes,
     HdrLevel,
     ContentTypeTrans,
+    PJ_ACK,
+    PJ_REQ,
+    PJ_OK,
+    PictureModes3D,
+    ResolutionModes,
+    PowerModes,
+    model_map,
 )
 
 
@@ -53,55 +61,43 @@ class JVCProjector:
         self.password = password
         self.connect_timeout: int = connect_timeout
         self.logger = logger
-        # Const values
-        self.PJ_OK: Final = ACKs.greeting.value
-        self.PJ_ACK: Final = ACKs.pj_ack.value
-        self.PJ_REQ: Final = ACKs.pj_req.value
         self.client = None
         # NZ or NX (NP5 is classified as NX)
         self.model_family = ""
+        self.lock = threading.Lock()
 
     def open_connection(self) -> bool:
         """Open a connection"""
         self.logger.debug("Starting open connection")
-        msg, success = self.reconnect()
+        success = self.reconnect()
 
-        if not success:
-            self.logger.error(msg)
-
+        self.logger.debug("Connection status: %s", success)
         return success
 
     def reconnect(self):
+        # TODO: on JVCConnectError or whatever, run this, then try again. Only send command should retry. Updates should just move on but try to reconnect.
         """Initiate keep-alive connection. This should handle any error and reconnect eventually."""
-        while True:
-            try:
-                self.logger.info(
-                    "Connecting to JVC Projector: %s:%s", self.host, self.port
-                )
-                self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.client.settimeout(self.connect_timeout)
+        try:
+            self.logger.info("Connecting to JVC Projector: %s:%s", self.host, self.port)
+            self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.client.settimeout(self.connect_timeout)
 
-                self.client.connect((self.host, self.port))
-                self.logger.info("Connected to JVC Projector")
+            self.client.connect((self.host, self.port))
+            self.logger.info("Connected to JVC Projector")
 
-                # create a reader and writer to do handshake
-                self.logger.debug("Handshaking")
-                result, success = self._handshake()
-                if not success:
-                    return result, success
-                self.logger.debug("Handshake complete and we are connected")
-                return "Connection done", True
+            # create a reader and writer to do handshake
+            self.logger.debug("Handshaking")
+            success = self._handshake()
+            return success
 
-            # includes conn refused
-            except TimeoutError:
-                self.logger.warning("Connection timed out, retrying in 2 seconds")
-                time.sleep(2)
-            except OSError as err:
-                self.logger.warning("Connecting failed, retrying in 2 seconds")
-                self.logger.debug(err)
-                time.sleep(2)
+        # includes conn refused
+        except TimeoutError:
+            self.logger.warning("Connection timed out")
+        except OSError as err:
+            self.logger.warning("Connecting failed")
+            self.logger.debug(err)
 
-    def _handshake(self) -> tuple[str, bool]:
+    def _handshake(self) -> bool:
         """
         Do the 3 way handshake
 
@@ -109,38 +105,39 @@ class JVCProjector:
         first, after connecting, see if we receive PJ_OK. If not, raise exception
         """
         if self.password:
-            pj_req = self.PJ_REQ + f"_{self.password}".encode()
+            pj_req = PJ_REQ + f"_{self.password}".encode()
             self.logger.debug("connecting with password hunter2")
         else:
-            pj_req = self.PJ_REQ
+            pj_req = PJ_REQ
 
         # 3 step handshake
-        msg_pjok = self.client.recv(len(self.PJ_OK))
-        self.logger.debug(msg_pjok)
-        if msg_pjok != self.PJ_OK:
-            result = f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
-            self.logger.error(result)
-            return result, False
+        with self.lock:
+            msg_pjok = self.client.recv(1000)
+            if msg_pjok != PJ_OK:
+                result = (
+                    f"Projector did not reply with correct PJ_OK greeting: {msg_pjok}"
+                )
+                self.logger.error(result)
+                return False
 
-        # try sending PJREQ, if there's an error, raise exception
-        try:
+            # try sending PJREQ, if there's an error, raise exception
             self.client.sendall(pj_req)
 
             # see if we receive PJACK, if not, raise exception
-            msg_pjack = self.client.recv(len(self.PJ_ACK))
-            if msg_pjack != self.PJ_ACK:
+            msg_pjack = self.client.recv(1000)
+            if msg_pjack != PJ_ACK:
                 result = f"Exception with PJACK: {msg_pjack}"
                 self.logger.error(result)
-                return result, False
+                return False
             self.logger.debug("Handshake successful")
-        except socket.timeout:
-            return "handshake timeout", False
+
         # Get model family
         self.model_family = self._get_modelfamily()
         self.logger.debug("Model code is %s", self.model_family)
-        return "ok", True
+        return True
 
     def _get_modelfamily(self) -> str:
+        self.logger.debug("Getting model family")
         cmd = (
             Header.reference.value
             + Header.pj_unit.value
@@ -153,51 +150,40 @@ class JVCProjector:
             command_type=Header.reference.value,
             ack=ACKs.model.value,
         )
-        models = {
-            "B5A1": "NZ9",
-            "B5A2": "NZ8",
-            "B5A3": "NZ7",
-            "A2B1": "NX9",
-            "A2B2": "NX7",
-            "A2B3": "NX5",
-            "B2A1": "NX9",
-            "B2A2": "NX7",
-            "B2A3": "NX5",
-            "B5B1": "NP5",
-            "XHR1": "X570R",
-            "XHR3": "X770R||X970R",
-            "XHP1": "X5000",
-            "XHP2": "XC6890",
-            "XHP3": "X7000||X9000",
-            "XHK1": "X500R",
-            "XHK2": "RS4910",
-            "XHK3": "X700R||X900R",
-        }
         model_res = self._replace_headers(res).decode()
         self.logger.debug(model_res)
 
         # get last 4 char of response and look up value
-        return models.get(model_res[-4:], "Unsupported")
+        return model_map.get(model_res[-4:], "Unsupported")
 
-    def _check_closed(self) -> bool:
+    def is_closed(self) -> bool:
+        """Return False if the socket is open, True if it is closed."""
         try:
-            # this will try to read bytes without blocking and also without removing them from buffer (peek only)
-            data = self.client.recv(16, socket.MSG_DONTWAIT | socket.MSG_PEEK)
-            if len(data) == 0:
-                return True
+            self.logger.debug("Checking if socket is closed")
+            # send null command
+            self.client.sendall(b"\x00\x00")
         except BlockingIOError:
-            return False  # socket is open and reading from it would block
+            self.logger.debug(
+                "BlockingIOError: Socket would block, indicating it's still open."
+            )
+            return False  # Socket is open and reading from it would block
         except ConnectionResetError:
-            return True  # socket was closed for some other reason
-        except OSError:
-            self.logger.warning("Socket not connected")
-            return False
+            self.logger.debug(
+                "ConnectionResetError: Connection was reset, socket is closed."
+            )
+            return True  # Connection was reset, socket is closed
+        except OSError as e:
+            self.logger.warning("OSError: Socket not connected: %s", e)
+            return True  # Treat any other OSError as a closed connection
 
-        return False
+        self.logger.debug(
+            "Socket is open, no exceptions were raised, and data is present."
+        )
+        return False  # If no exceptions and data is present, the socket is open
 
     def close_connection(self):
         """
-        Only useful for testing
+        close the connection
         """
         self.client.close()
 
@@ -223,41 +209,42 @@ class JVCProjector:
                 success flag: bool
             )
         """
+        # try to reconnect if connection is closed
+        # if self.is_closed():
+        #     self.logger.warning("reconnecting")
+        #     self.reconnect()
+
         # Check commands
         self.logger.debug("Command_type: %s", command_type)
         self.logger.debug(
             "Send command: %s is of type %s", send_command, type(send_command)
         )
-        self.logger.debug("Send ack: %s", ack)
-        if command_type == Header.reference.value:
-            return self._do_command(send_command, ack, command_type)
 
-        if isinstance(send_command, list):
-            # check emulate remote first
-            if "remote" in send_command[0]:
-                try:
-                    _, value = send_command[0].split(",")
-                    return self.emulate_remote(value)
-                except ValueError:
-                    return f"No value for command provided {send_command}", False
+        with self.lock:
+            self.logger.debug("Send ack: %s", ack)
+            if command_type == Header.reference.value:
+                return self._do_command(send_command, ack, command_type)
 
-            for cmd in send_command:
-                cons_command, ack = self._construct_command(cmd, command_type)
-                if not ack:
-                    return cons_command, ack
-                # need a delay otherwise it kills connection
-                time.sleep(0.1)
-                return self._do_command(cons_command, ack.value, command_type)
+            if isinstance(send_command, list):
+                # check emulate remote first
+                if "remote" in send_command[0]:
+                    try:
+                        _, value = send_command[0].split(",")
+                        return self.emulate_remote(value)
+                    except ValueError:
+                        return f"No value for command provided {send_command}", False
 
-        else:
-            try:
-                cons_command, ack = self._construct_command(send_command, command_type)
-            except TypeError:
-                cons_command = send_command
+                for cmd in send_command:
+                    cons_command, ack = self._construct_command(cmd, command_type)
+                    if not ack:
+                        self.logger.warning(
+                            "Command not implemented: %s - %s", cmd, cons_command
+                        )
+                        return cons_command, ack
+                    return self._do_command(cons_command, ack.value, command_type)
 
-            if not ack:
-                return cons_command, ack
-            return self._do_command(cons_command, ack.value, command_type)
+            else:
+                return ("unsupported commands", False)
 
     def _do_command(
         self,
@@ -267,31 +254,15 @@ class JVCProjector:
     ) -> tuple[Union[str, bytes], bool]:
 
         # ensure this doesnt run with dead client
-        if self.client is None:
-            self.logger.debug("Client is none. Reforming connection")
+        if self.is_closed():
+            self.logger.warning("reconnecting")
             self.reconnect()
 
-        # max retries
-        retry_count = 0
-        # use this to store error if retry count exceeded
-        error = ""
-
         # retry once in case connection is dead
-        while retry_count < 2:
-            self.logger.debug("do_command sending command: %s", command)
-            # send the command
-            try:
-                self.client.sendall(command)
-            except ConnectionError as err:
-                # reaching this means the writer was closed somewhere
-                self.logger.error(err)
-                # restart the connection
-                self.client.close()
-                self.reconnect()
-                self.logger.debug("Sending command again")
-                # restart the loop
-                retry_count += 1
-                continue
+        self.logger.debug("do_command sending command: %s", command)
+        # send the command
+        try:
+            self.client.sendall(command)
 
             # if we send a command that returns info, the projector will send
             # an ack, followed by the actual message. Check to see if the ack sent by
@@ -302,42 +273,26 @@ class JVCProjector:
             self.logger.debug("constructed ack_value: %s", ack_value)
 
             # Receive the acknowledgement from PJ
-            try:
-                # most commands timeout when PJ is off
-                received_msg = self.client.recv(len(ack_value))
-            except socket.timeout as err:
-                error = f"Timed out. Command {command} may grayed out or cmd is running already."
-                self.logger.debug(err)
-                self.client.close()
-                self.reconnect()
-                retry_count += 1
-                continue
 
-            except ConnectionRefusedError as err:
-                error = "Connection Refused when getting msg"
-                self.logger.debug(err)
-                self.client.close()
-                self.reconnect()
-                retry_count += 1
-                continue
-
+            # most commands timeout when PJ is off
+            received_msg = self.client.recv(len(ack_value))
             self.logger.debug("received msg from PJ: %s", received_msg)
 
             msg = self._check_received_msg(received_msg, ack_value, command_type)
             if msg == b"":
-                self.logger.error("Got a blank msg. Restarting connection")
-                self.client.close()
-                self.reconnect()
-                retry_count += 1
-                continue
+                self.logger.error("Got a blank msg")
 
             # if all fine, return the value
             return msg, True
 
-        self.logger.error("retry count for running commands exceeded")
-        self.logger.error(error)
+        except TimeoutError as err:
+            self.logger.error("TimeoutError when getting msg %s", err)
 
-        raise TimeoutError(error)
+        except ConnectionRefusedError as err:
+            self.logger.error("ConnectionRefusedError when getting msg %s", err)
+
+        except OSError as err:
+            self.logger.error("OSError when getting msg %s", err)
 
     def _check_received_msg(
         self, received_msg: bytes, ack_value: bytes, command_type: bytes
@@ -458,13 +413,13 @@ class JVCProjector:
         """
         Turns on PJ
         """
-        return self.exec_command("power,on")
+        return self.exec_command(["power,on"])
 
     def power_off(self) -> tuple[str, bool]:
         """
         Turns off PJ
         """
-        return self.exec_command("power,off")
+        return self.exec_command(["power,off"])
 
     def _replace_headers(self, item: bytes) -> bytes:
         """
@@ -476,7 +431,7 @@ class JVCProjector:
 
         return item
 
-    def _do_reference_op(self, command: str, ack: ACKs) -> tuple[str, bool]:
+    def _do_reference_op(self, command: str, ack: ACKs) -> str:
         cmd = (
             Header.reference.value
             + Header.pj_unit.value
@@ -484,165 +439,215 @@ class JVCProjector:
             + Footer.close.value
         )
 
-        msg, success = self._send_command(
+        msg, _ = self._send_command(
             cmd,
             ack=ACKs[ack.name].value,
             command_type=Header.reference.value,
         )
 
-        if success:
-            msg = self._replace_headers(msg)
+        return msg
 
-        return msg, success
+    def _get_attribute(self, command: str, replace: bool = True) -> str:
+        """
+        Generic function to get the current attribute asynchronously
+        """
+        cmd_tup = Commands[command].value
+        self.logger.debug("Getting attribute %s with tuple %s", command, cmd_tup)
+        cmd_enum = cmd_tup[1]
+        ack = cmd_tup[2]
+        self.logger.debug("Getting attribute %s with tuple %s", command, cmd_tup)
+        try:
+            state = self._do_reference_op(command, ack)
+            if not state:
+                self.logger.debug("%s Command failed", command)
+                return ""
+            if replace:
+                # remove the returned headers
+                r = self._replace_headers(state)
+                if not isinstance(r, bytes):
+                    self.logger.error("Attribute %s is not bytes", command)
+                    return ""
+                self.logger.debug("Attribute %s is %s", command, r)
+                # look up the enum value like b"1" -> on in PowerModes
+                return cmd_enum(r.replace(ack.value, b"")).name
 
-    # its possible to write one generic func to do all of these but there is different support per model so its easier to just split it up
+            return state
+        except ValueError as err:
+            self.logger.error("Attribute not found - %s", err)
+            raise
+        except AttributeError as err:
+            self.logger.error("tried to access name on non-enum: %s", err)
+            return ""
+
     def get_low_latency_state(self) -> str:
         """
         Get the current state of LL
         """
-        state, _ = self._do_reference_op("low_latency", ACKs.picture_ack)
-
-        return LowLatencyModes(state.replace(ACKs.picture_ack.value, b"")).name
+        return self._get_attribute("low_latency")
 
     def get_picture_mode(self) -> str:
         """
         Get the current picture mode as str -> user1, natural
         """
-        state, _ = self._do_reference_op("picture_mode", ACKs.picture_ack)
-        return PictureModes(state.replace(ACKs.picture_ack.value, b"")).name
+        return self._get_attribute("picture_mode")
 
     def get_install_mode(self) -> str:
         """
         Get the current install mode as str
         """
-        state, _ = self._do_reference_op("installation_mode", ACKs.install_acks)
-        return InstallationModes(state.replace(ACKs.install_acks.value, b"")).name
+        return self._get_attribute("installation_mode")
 
     def get_input_mode(self) -> str:
         """
         Get the current input mode
         """
-        state, _ = self._do_reference_op("input_mode", ACKs.input_ack)
-        return InputModes(state.replace(ACKs.input_ack.value, b"")).name
+        return self._get_attribute("input_mode")
 
     def get_mask_mode(self) -> str:
         """
         Get the current mask mode
         """
-        state, _ = self._do_reference_op("mask", ACKs.hdmi_ack)
-        return MaskModes(state.replace(ACKs.hdmi_ack.value, b"")).name
+        return self._get_attribute("mask")
 
     def get_laser_mode(self) -> str:
         """
         Get the current laser mode
         """
-        state, _ = self._do_reference_op("laser_mode", ACKs.picture_ack)
-        return LaserDimModes(state.replace(ACKs.picture_ack.value, b"")).name
+        return self._get_attribute("laser_mode")
 
-    def get_eshift_mode(self) -> str:
+    def get_eshift_mode(self) -> bool:
         """
         Get the current eshift mode
         """
-        state, _ = self._do_reference_op("eshift_mode", ACKs.picture_ack)
-        return EshiftModes(state.replace(ACKs.picture_ack.value, b"")).name
+        res = self._get_attribute("eshift_mode")
+        return res == "on"
 
     def get_color_mode(self) -> str:
         """
         Get the current color mode
         """
-        state, _ = self._do_reference_op("color_mode", ACKs.hdmi_ack)
-        return ColorSpaceModes(state.replace(ACKs.hdmi_ack.value, b"")).name
+        return self._get_attribute("color_mode")
 
     def get_input_level(self) -> str:
         """
         Get the current input level
         """
-        state, _ = self._do_reference_op("input_level", ACKs.hdmi_ack)
-        return InputLevel(state.replace(ACKs.hdmi_ack.value, b"")).name
+        return self._get_attribute("input_level")
 
-    def get_software_version(self) -> str:
+    def get_software_version(self) -> float:
         """
         Get the current software version
         """
-        state, _ = self._do_reference_op("get_software_version", ACKs.info_ack)
-        return state.replace(ACKs.info_ack.value, b"")
+        state = self._get_attribute("get_software_version", replace=False)
+        self.logger.debug("Software version is %s", state)
+        # returns something like 0210PJ as bytes
+        # b'@\x89\x01IF0300PJ\n'
+        ver: str = (
+            self._replace_headers(state)
+            .replace(ACKs.info_ack.value, b"")
+            .replace(b"PJ", b"")
+            .decode()
+            # remove leading 0
+            .lstrip("0")
+        )
+        # add a dot to the version
+        return float(f"{ver[:1]}.{ver[1:]}")
+
+    def get_laser_value(self) -> int:
+        """
+        Get the current software version FW 3.0+ only
+        """
+        state = self._get_attribute("laser_value", replace=False)
+        raw = int(
+            self._replace_headers(state).replace(ACKs.picture_ack.value, b""),
+            16,
+        )
+        # jvc returns a weird scale
+        return math.floor(((raw - 109) / 1.1) + 0.5)
 
     def get_content_type(self) -> str:
         """
         Get the current content type
         """
-        state, _ = self._do_reference_op("content_type", ACKs.picture_ack)
-        return ContentTypes(state.replace(ACKs.picture_ack.value, b"")).name
+        return self._get_attribute("content_type")
 
     def get_content_type_trans(self) -> str:
         """
         Get the current auto content transition type
         """
-        state, _ = self._do_reference_op("content_type_trans", ACKs.picture_ack)
-        return ContentTypeTrans(state.replace(ACKs.picture_ack.value, b"")).name
+        return self._get_attribute("content_type_trans")
 
     def get_hdr_processing(self) -> str:
         """
         Get the current hdr processing setting like frame by frame. Will fail if not in HDR mode!
         """
-        state, _ = self._do_reference_op("hdr_processing", ACKs.picture_ack)
-        return HdrProcessing(state.replace(ACKs.picture_ack.value, b"")).name
+        return self._get_attribute("hdr_processing")
 
     def get_hdr_level(self) -> str:
         """
         Get the current hdr quantization level
         """
-        state, _ = self._do_reference_op("hdr_level", ACKs.picture_ack)
-        return HdrLevel(state.replace(ACKs.picture_ack.value, b"")).name
+        return self._get_attribute("hdr_level")
 
     def get_hdr_data(self) -> str:
         """
         Get the current hdr mode -> sdr, hdr10_plus, etc
         """
-        state, _ = self._do_reference_op("hdr_data", ACKs.info_ack)
-        return HdrData(state.replace(ACKs.info_ack.value, b"")).name
+        return self._get_attribute("hdr_data")
 
     def get_lamp_power(self) -> str:
         """
         Get the current lamp power non-NZ only
         """
-        state, _ = self._do_reference_op("lamp_power", ACKs.picture_ack)
-        return LampPowerModes(state.replace(ACKs.picture_ack.value, b"")).name
+        return self._get_attribute("lamp_power")
 
     def get_lamp_time(self) -> int:
         """
         Get the current lamp time
         """
-        state, _ = self._do_reference_op("lamp_time", ACKs.info_ack)
-        return int(state.replace(ACKs.info_ack.value, b""), 16)
+        state = self._get_attribute("lamp_time", replace=False)
+        return int(
+            self._replace_headers(state).replace(ACKs.info_ack.value, b""), 16
+        )
 
     def get_laser_power(self) -> str:
         """
         Get the current laser power NZ only
         """
-        state, _ = self._do_reference_op("laser_power", ACKs.picture_ack)
-        return LaserPowerModes(state.replace(ACKs.picture_ack.value, b"")).name
+        return self._get_attribute("laser_power")
 
     def get_theater_optimizer_state(self) -> str:
         """
         If theater optimizer is on/off Will fail if not in HDR mode!
         """
-        state, _ = self._do_reference_op("theater_optimizer", ACKs.picture_ack)
-        return TheaterOptimizer(state.replace(ACKs.picture_ack.value, b"")).name
+        return self._get_attribute("theater_optimizer")
 
     def get_aspect_ratio(self) -> str:
         """
         Return aspect ratio
         """
-        state, _ = self._do_reference_op("aspect_ratio", ACKs.hdmi_ack)
-        return AspectRatioModes(state.replace(ACKs.hdmi_ack.value, b"")).name
+        return self._get_attribute("aspect_ratio")
 
-    def get_source_status(self) -> str:
+    def get_anamorphic(self) -> str:
         """
-        Return source status
+        Return anamorphic mode
         """
-        state, _ = self._do_reference_op("source_status", ACKs.source_ack)
-        return SourceStatuses(state.replace(ACKs.source_ack.value, b"")).name
+        return self._get_attribute("anamorphic")
+
+    def get_source_status(self) -> bool:
+        """
+        Return source status True if it has a signal
+        """
+        res = self._get_attribute("source_status")
+        return res == "signal"
+
+    def get_source_display(self) -> str:
+        """
+        Return source display resolution like 4k_4096p60
+        """
+        res = self._get_attribute("source_disaply")
+
+        return res.replace("r_", "")
 
     def _get_power_state(self) -> str:
         """
@@ -651,9 +656,7 @@ class JVCProjector:
         Returns str: values of PowerStates
         """
         # remove the headers
-        state, _ = self._do_reference_op("power", ACKs.power_ack)
-
-        return PowerStates(state.replace(ACKs.power_ack.value, b"")).name
+        return self._get_attribute("power")
 
     def is_on(self) -> bool:
         """
@@ -676,7 +679,7 @@ class JVCProjector:
             [
                 command.name
                 for command in Commands
-                if command.name not in ["power_status", "current_output", "info"]
+                if command.name not in ["power", "current_output", "info"]
             ]
         )
         print("Currently Supported Commands:")

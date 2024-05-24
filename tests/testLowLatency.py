@@ -2,57 +2,67 @@ import unittest
 import os
 from dotenv import load_dotenv
 from jvc_projector.jvc_projector import JVCProjector
+import logging
+import time
 
-# load .env
+# Load .env
 load_dotenv()
 
 password = os.getenv("JVC_PASSWORD")
 host = os.getenv("JVC_HOST")
 
-# JVC will drop connection without throttling in place
-jvc = JVCProjector(host=host, connect_timeout=10, password=password)
-jvc.open_connection()
 
 class TestFunctions(unittest.TestCase):
     """
     Test projector
     """
 
+    @classmethod
+    def setUpClass(cls):
+        # Configure the logger for the test class
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s [Line: %(lineno)d]",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+
+        # Create a logger instance
+        cls.logger = logging.getLogger(__name__)
+        cls.logger.propagate = False
+
+        # Ensure the logger prints to the console
+        if not cls.logger.handlers:
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(
+                logging.Formatter(
+                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s [Line: %(lineno)d]"
+                )
+            )
+            cls.logger.addHandler(console_handler)
+
+        # JVC will drop connection without throttling in place
+        cls.jvc = JVCProjector(
+            host=host, connect_timeout=10, password=password, logger=cls.logger
+        )
+        s = cls.jvc.open_connection()
+        assert s, "Failed to connect to the projector"
+
     def test_mock_update(self):
         """Emulates how HA would run updates"""
-        state = jvc.is_on()
-        self.assertEqual(state, True)
-        self.assertEqual(jvc.model_family, "NZ7")
-
+        state = self.jvc.is_on()
+        self.assertEqual(state, False)
+        self.assertEqual(self.jvc.model_family, "NZ7")
+        if not state:
+            self.jvc.power_on()
+            while not self.jvc.is_on():
+                time.sleep(1)
+                pass
         if state:
-            print(jvc.get_software_version())
-    #         lowlatency_enabled = jvc.is_ll_on()
-    #         installation_mode = jvc.get_install_mode()
-    #         input_mode = jvc.get_input_mode()
-    #         laser_mode = jvc.get_laser_mode()
-    #         eshift = jvc.get_eshift_mode()
-    #         color_mode = jvc.get_color_mode()
-    #         input_level = jvc.get_input_level()
-    #         content_type = jvc.get_content_type()
+            print(self.jvc.get_software_version())
+            print(self.jvc.get_lamp_time())
+            print(self.jvc.get_laser_value())
+            print(self.jvc.get_laser_mode())
 
-    #         self.assertFalse(lowlatency_enabled)
-    #         self.assertEqual(installation_mode, "mode3")
-    #         self.assertEqual(input_mode, "hdmi2")
-    #         self.assertEqual(laser_mode, "auto3")
-    #         self.assertEqual(eshift, "off")
-    #         self.assertEqual(color_mode, "auto")
-    #         self.assertEqual(input_level, "standard")
-    #         self.assertEqual(content_type, "sdr")
-    
-    # def test_send_command(self):
-    #     """test a command"""
-    #     # open menu
-    #     ack, success = jvc.exec_command("menu, menu")
 
-    #     self.assertEqual(ack, "ok")
-    #     self.assertTrue(success)
-
-    #     # close menu
-    #     ack, success = jvc.exec_command("menu, menu")
-    #     self.assertEqual(ack, "ok")
-    #     self.assertTrue(success)
+if __name__ == "__main__":
+    unittest.main()
