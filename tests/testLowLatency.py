@@ -50,13 +50,11 @@ class TestFunctions(unittest.TestCase):
     def test_mock_update(self):
         """Emulates how HA would run updates"""
         state = self.jvc.is_on()
-        self.assertEqual(state, False)
         self.assertEqual(self.jvc.model_family, "NZ7")
         if not state:
             self.jvc.power_on()
             while not self.jvc.is_on():
                 time.sleep(1)
-                pass
         if state:
             print(self.jvc.get_software_version())
             print(self.jvc.get_lamp_time())

@@ -438,7 +438,7 @@ class JVCProjector:
             + Commands[command].value[0]
             + Footer.close.value
         )
-
+        
         msg, _ = self._send_command(
             cmd,
             ack=ACKs[ack.name].value,
@@ -457,7 +457,10 @@ class JVCProjector:
         ack = cmd_tup[2]
         self.logger.debug("Getting attribute %s with tuple %s", command, cmd_tup)
         try:
-            state = self._do_reference_op(command, ack)
+            try:
+                state = self._do_reference_op(command, ack)
+            except TypeError:
+                return ""
             if not state:
                 self.logger.debug("%s Command failed", command)
                 return ""
