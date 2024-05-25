@@ -1,10 +1,10 @@
 import setuptools
 
-with open("README.md", "r") as fh:
+with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="jvc_projector_remote_improved2",
+    name="pyjvc",
     version="3.7.3",
     author="iloveicedgreentea",
     description="A package to control JVC projectors over IP",

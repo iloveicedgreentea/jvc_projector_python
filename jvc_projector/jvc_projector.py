@@ -74,8 +74,7 @@ class JVCProjector:
         self.logger.debug("Connection status: %s", success)
         return success
 
-    def reconnect(self):
-        # TODO: on JVCConnectError or whatever, run this, then try again. Only send command should retry. Updates should just move on but try to reconnect.
+    def reconnect(self) -> bool:
         """Initiate keep-alive connection. This should handle any error and reconnect eventually."""
         try:
             self.logger.info("Connecting to JVC Projector: %s:%s", self.host, self.port)
@@ -96,6 +95,8 @@ class JVCProjector:
         except OSError as err:
             self.logger.warning("Connecting failed")
             self.logger.debug(err)
+
+        return False
 
     def _handshake(self) -> bool:
         """
@@ -438,7 +439,7 @@ class JVCProjector:
             + Commands[command].value[0]
             + Footer.close.value
         )
-        
+
         msg, _ = self._send_command(
             cmd,
             ack=ACKs[ack.name].value,
@@ -609,9 +610,7 @@ class JVCProjector:
         Get the current lamp time
         """
         state = self._get_attribute("lamp_time", replace=False)
-        return int(
-            self._replace_headers(state).replace(ACKs.info_ack.value, b""), 16
-        )
+        return int(self._replace_headers(state).replace(ACKs.info_ack.value, b""), 16)
 
     def get_laser_power(self) -> str:
         """
