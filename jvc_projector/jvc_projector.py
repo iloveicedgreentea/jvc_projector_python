@@ -8,37 +8,16 @@ from typing import Union
 import threading
 import socket
 from jvc_projector.commands import (
-    InputLevel,
-    ColorSpaceModes,
-    EshiftModes,
     ACKs,
     Footer,
     Header,
     Commands,
     PowerStates,
-    PictureModes,
-    InstallationModes,
-    InputModes,
-    LaserDimModes,
     Enum,
     LowLatencyModes,
-    ContentTypes,
-    HdrProcessing,
-    SourceStatuses,
-    TheaterOptimizer,
-    HdrData,
-    LampPowerModes,
-    LaserPowerModes,
-    AspectRatioModes,
-    MaskModes,
-    HdrLevel,
-    ContentTypeTrans,
     PJ_ACK,
     PJ_REQ,
     PJ_OK,
-    PictureModes3D,
-    ResolutionModes,
-    PowerModes,
     model_map,
 )
 
@@ -65,6 +44,8 @@ class JVCProjector:
         # NZ or NX (NP5 is classified as NX)
         self.model_family = ""
         self.lock = threading.Lock()
+
+        socket.setdefaulttimeout(3)
 
     def open_connection(self) -> bool:
         """Open a connection"""
