@@ -383,7 +383,7 @@ class JVCProjector:
             + Footer.close.value
         )
 
-        return self._send_command(
+        return self._do_command(
             cmd,
             ack=ACKs.menu_ack,
             command_type=Header.operation.value,
