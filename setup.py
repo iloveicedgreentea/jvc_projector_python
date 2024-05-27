@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="pyjvc",
-    version="3.7.5",
+    version="3.7.6",
     author="iloveicedgreentea",
     description="A package to control JVC projectors over IP",
     long_description=long_description,
