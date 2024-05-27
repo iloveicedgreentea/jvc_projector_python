@@ -8,7 +8,7 @@ This is designed to work with my Home Assistant plugin: https://github.com/ilove
 
 ```
 # Assuming you have a venv with >=python3.10
-pip install jvc-projector-remote-improved2
+pip install pyjvc
 ```
 
 ## Quick Start
@@ -20,11 +20,11 @@ jvc = JVCProjector(host="ipaddr", connect_timeout=10, password="password")
 
 # Commands are passed as a single string delimited by a comma
 # open menu
-cmd = jvc.exec_command("menu, menu")
+cmd = jvc.exec_command(["menu, menu"])
 # press left button
-cmd = jvc.exec_command("menu, left")
+cmd = jvc.exec_command(["menu, left"])
 # set picture mode to frame adapt HDR
-cmd = jvc.exec_command("picture_mode, frame_adapt_hdr")
+cmd = jvc.exec_command(["picture_mode, frame_adapt_hdr"])
 # turn on
 cmd = jvc.power_on()
 ```
@@ -38,13 +38,13 @@ The commands are structured to use simple command keywords and parameters. This 
 ```python
 Command: low_latency
 Parameter: off
-code: jvc.exec_command("low_latency, off")
+code: jvc.exec_command(["low_latency, off"])
 ```
 
 ```python
 Command: picture_mode
 Parameter: hdr_plus
-code: jvc.exec_command("picture_mode, hdr_plus")
+code: jvc.exec_command(["picture_mode, hdr_plus"])
 ```
 
 You can also run multiple commands in a row by just giving it a list of commands
@@ -70,17 +70,6 @@ Use `print_commands()` to get all the latest support commands. This is dynamical
 - Aperture off/auto1/auto2
 - Anamorphic modes
 - And many others
-
-## Gaming/Film Modes
-I recommend setting up picture mode presets for each mode. Low latency toggle annoyingly will not work unless certain things are disabled first. 
-It will not disable things for you. 
-
-SDR Gaming: user1||natural, low latency on, etc
-HDR Gaming: hdr10, low latency on, etc
-SDR Film: natural||user1, low latency off, laser mode 3, motion enhance high
-HDR Film: frame adapt HDR, low latency off, laser mode 3, hdr quantization to auto(wide)
-
-Then use the commands to switch between picture modes.
 
 ## Supported Models
 
@@ -312,27 +301,4 @@ SourceStatuses
 TheaterOptimizer
         off
         on
-```
-
-### Adding new commands
-
-All commands are stored in Enums within `commands.py` so simply adding them to that file in the proper Enum will automatically propagate to code. Add them using [this guide](http://pro.jvc.com/pro/attributes/PRESENT/manual/2018_ILA-FPJ_Ext_Command_List_v1.2.pdf) as a reference.
-
-### Testing
-
-JVC_TEST_POWER: true/false to test power functions
-JVC_TEST_FUNCTIONS: true/false to test various button functions
-
-You can run the test at the local device or run a mock server I made (WIP) to test commands
-
-```shell
-# Venv in one window
-python mock/mochrie.py
-```
-
-```shell
-# Run tests in other window
-source .env
-export JVC_HOST=127.0.0.1
-make test
 ```
