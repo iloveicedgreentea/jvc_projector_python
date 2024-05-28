@@ -385,7 +385,7 @@ class JVCProjector:
 
         return self._do_command(
             cmd,
-            ack=ACKs.menu_ack,
+            ack=ACKs.menu_ack.value,
             command_type=Header.operation.value,
         )
 
