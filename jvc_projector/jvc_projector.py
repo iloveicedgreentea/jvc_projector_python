@@ -628,7 +628,7 @@ class JVCProjector:
         """
         Return source display resolution like 4k_4096p60
         """
-        res = self._get_attribute("source_disaply")
+        res = self._get_attribute("source_display")
 
         return res.replace("r_", "")
 
