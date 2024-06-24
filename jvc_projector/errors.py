@@ -16,3 +16,7 @@ class CommandRetryExceededError(Exception):
 
 class ShouldReconnectError(Exception):
     pass
+
+
+class ValueIsNotIntError(Exception):
+    pass

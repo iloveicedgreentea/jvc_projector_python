@@ -20,6 +20,7 @@ from jvc_projector.commands import (
     PJ_OK,
     model_map,
 )
+import jvc_projector.errors
 
 
 class JVCProjector:
@@ -61,8 +62,17 @@ class JVCProjector:
             self.logger.info("Connecting to JVC Projector: %s:%s", self.host, self.port)
             self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client.settimeout(self.connect_timeout)
+            try:
+                self.client.connect((self.host, self.port))
+            except TypeError as err:
+                self.logger.error("TypeError when connecting")
+                raise TypeError(
+                    f"Invalid port or host - {self.port}:{self.host}"
+                ) from err
+            except (ConnectionRefusedError, TimeoutError, OSError) as err:
+                self.logger.error("Connection failed")
+                raise ConnectionError from err
 
-            self.client.connect((self.host, self.port))
             self.logger.info("Connected to JVC Projector")
 
             # create a reader and writer to do handshake
@@ -304,6 +314,30 @@ class JVCProjector:
         # return blank will force it to retry
         return b""
 
+    def _decimal_to_signed_hex(self, number: int) -> bytes:
+        # Convert input string to integer
+
+        # Convert the decimal value to signed 2-byte hexadecimal
+        hex_value = format(number & 0xFFFF, "04X")
+
+        byte_values = bytes(hex_value, "ascii")
+
+        return byte_values
+
+    def _scale_laser_value(self, value: str) -> bytes:
+        try:
+            percent = int(value)
+        except ValueError as exc:
+            raise ValueError("Value must be an int") from exc
+
+        if percent > 100:
+            return ValueError("Value must be between 0 and 100")
+
+        scaled = 109 + math.floor(1.1 * percent + 0.5)
+        return self._decimal_to_signed_hex(
+            scaled
+        )  # Convert to hex string with 4 characters
+
     def _construct_command(
         self, raw_command: str, command_type: bytes
     ) -> tuple[bytes, ACKs]:
@@ -319,11 +353,31 @@ class JVCProjector:
         # Check if command is implemented
         if not hasattr(Commands, command):
             self.logger.error("Command not implemented: %s", command)
-            return "Not Implemented", False
+            raise NotImplementedError(f"Command {command} not implemented")
 
         # construct the command with nested Enums
         command_name, val, ack = Commands[command].value
-        command_base: bytes = command_name + val[value.lstrip(" ")].value
+
+        if command == "laser_value":
+            value = self._scale_laser_value(value)
+
+        self.logger.debug("val is %s", val)
+        self.logger.debug("type of val is %s", type(val))
+        self.logger.debug("value is %s", value)
+
+        # some commands use int values so we can just pass the value as byte
+        if issubclass(val, int):
+            try:
+                command_base: bytes = command_name + value
+            except ValueError as err:
+                self.logger.error("Value %s is not an int", value)
+                raise jvc_projector.errors.ValueIsNotIntError from err
+        else:
+            try:
+                command_base: bytes = command_name + val[value.lstrip(" ")].value
+            except KeyError as err:
+                self.logger.error("Value %s is not in Enum", value)
+                raise NotImplementedError(f"Value {value} not in Enum") from err
         # Construct command based on required values
         command: bytes = (
             command_type + Header.pj_unit.value + command_base + Footer.close.value
@@ -538,17 +592,21 @@ class JVCProjector:
         # add a dot to the version
         return float(f"{ver[:1]}.{ver[1:]}")
 
-    def get_laser_value(self) -> int:
-        """
-        Get the current software version FW 3.0+ only
-        """
-        state = self._get_attribute("laser_value", replace=False)
+    def _translate_laser_value(self, state: str) -> int:
         raw = int(
             self._replace_headers(state).replace(ACKs.picture_ack.value, b""),
             16,
         )
         # jvc returns a weird scale
         return math.floor(((raw - 109) / 1.1) + 0.5)
+
+    def get_laser_value(self) -> int:
+        """
+        Get the current software version FW 3.0+ only
+        """
+        state = self._get_attribute("laser_value", replace=False)
+
+        return self._translate_laser_value(state)
 
     def get_content_type(self) -> str:
         """
