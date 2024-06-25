@@ -7,7 +7,7 @@ This is designed to work with my Home Assistant plugin: https://github.com/ilove
 ## Installation
 
 ```
-# Assuming you have a venv with >=python3.10
+# Assuming you have a venv with >=python3.11
 pip install pyjvc
 ```
 
