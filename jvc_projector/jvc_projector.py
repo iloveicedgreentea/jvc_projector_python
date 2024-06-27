@@ -7,6 +7,7 @@ import math
 from typing import Union
 import threading
 import socket
+import hashlib
 from jvc_projector.commands import (
     ACKs,
     Footer,
@@ -34,11 +35,14 @@ class JVCProjector:
         logger: logging.Logger = logging.getLogger(__name__),
         port: int = 20554,
         connect_timeout: int = 3,
+        # 2024+ models require a sha256 encoded password
+        new_model: bool = False,
     ):
         self.host = host
         self.port = port
-        # NZ models have password authentication
+        # NZ+ models have password authentication
         self.password = password
+        self.new_model = new_model
         self.connect_timeout: int = connect_timeout
         self.logger = logger
         self.client = None
@@ -89,6 +93,13 @@ class JVCProjector:
 
         return False
 
+    def _password_to_sha256(self, password: str) -> str:
+        """
+        Convert a password to sha256 for new models
+        """
+        val = f"{password}JVCKWPJ"
+        return hashlib.sha256(val.encode()).hexdigest()
+
     def _handshake(self) -> bool:
         """
         Do the 3 way handshake
@@ -97,8 +108,13 @@ class JVCProjector:
         first, after connecting, see if we receive PJ_OK. If not, raise exception
         """
         if self.password:
-            pj_req = PJ_REQ + f"_{self.password}".encode()
-            self.logger.debug("connecting with password hunter2")
+            # new models require a sha256 encoded password
+            val = self.password
+            if self.new_model:
+                val = self._password_to_sha256(val)
+                self.logger.debug("using sha256 password")
+            pj_req = PJ_REQ + f"_{val}".encode()
+            self.logger.debug("connecting with password")
         else:
             pj_req = PJ_REQ
 

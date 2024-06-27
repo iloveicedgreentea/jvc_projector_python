@@ -80,6 +80,13 @@ class TestUnits(unittest.TestCase):
             Header.operation.value,
         )
 
+    def test_sha_password(self):
+        """Test _sha_password with known value"""
+        password = self.jvc._password_to_sha256("1234567890")
+        self.assertEqual(
+            password, "cc3054cf7c701a32a883bf45a7b19cbf7f62db778208b3c058e0c6dde886996f"
+        )
+
 
 class TestFunctions(unittest.TestCase):
     """
