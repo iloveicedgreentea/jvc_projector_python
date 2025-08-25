@@ -1,5 +1,6 @@
 # JVC Projector Python Library
 
+# Deprecated: use https://github.com/iloveicedgreentea/pyjvcprojector 
 This implements new features, improvements, and optimizations inspired by https://github.com/bezmi/jvc_projector. This was made with NZ models in mind. Almost every function will work with NX models but I do not guarantee operability for them.
 
 This is designed to work with my Home Assistant plugin: https://github.com/iloveicedgreentea/jvc_homeassistant
